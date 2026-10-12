@@ -236,13 +236,26 @@ private fun CoverFlowItem(
                 .combinedClickable(onClick = onClick, onLongClick = onLongClick),
         )
 
-        // Mirror reflection fading into the floor
+        // Mirror reflection fading into the floor. The fade is applied to the whole unflipped box so it
+        // reaches zero exactly at the cut
         Box(
             modifier = Modifier
-                .padding(top = 6.dp)
+                .padding(top = 4.dp)
                 .fillMaxWidth()
-                .height(48.dp)
-                .clipToBounds(),
+                .height(56.dp)
+                .clipToBounds()
+                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+                .drawWithContent {
+                    drawContent()
+                    drawRect(
+                        brush = Brush.verticalGradient(
+                            0f to Color.Black.copy(alpha = 0.32f),
+                            0.6f to Color.Black.copy(alpha = 0.08f),
+                            1f to Color.Transparent,
+                        ),
+                        blendMode = BlendMode.DstIn,
+                    )
+                },
         ) {
             MangaCover.Book(
                 data = coverData,
@@ -250,21 +263,7 @@ private fun CoverFlowItem(
                 modifier = Modifier
                     .fillMaxWidth()
                     .wrapContentHeight(align = Alignment.Top, unbounded = true)
-                    .graphicsLayer {
-                        scaleY = -1f
-                        compositingStrategy = CompositingStrategy.Offscreen
-                    }
-                    .drawWithContent {
-                        drawContent()
-                        drawRect(
-                            brush = Brush.verticalGradient(
-                                0f to Color.Transparent,
-                                0.82f to Color.Transparent,
-                                1f to Color.Black.copy(alpha = 0.3f),
-                            ),
-                            blendMode = BlendMode.DstIn,
-                        )
-                    },
+                    .graphicsLayer { scaleY = -1f },
             )
         }
     }

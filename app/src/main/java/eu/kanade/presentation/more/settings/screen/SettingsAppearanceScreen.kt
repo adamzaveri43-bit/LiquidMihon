@@ -11,11 +11,16 @@ import androidx.core.app.ActivityCompat
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import eu.kanade.domain.ui.UiPreferences
+import eu.kanade.domain.ui.model.AppFont
+import eu.kanade.domain.ui.model.AppTheme
+import eu.kanade.domain.ui.model.GlassStyle
+import eu.kanade.domain.ui.model.LibraryBackground
 import eu.kanade.domain.ui.model.TabletUiMode
 import eu.kanade.domain.ui.model.ThemeMode
 import eu.kanade.domain.ui.model.setAppCompatDelegateThemeMode
 import eu.kanade.presentation.more.settings.Preference
 import eu.kanade.presentation.more.settings.screen.appearance.AppLanguageScreen
+import eu.kanade.presentation.more.settings.widget.AccentColorPreferenceWidget
 import eu.kanade.presentation.more.settings.widget.AppThemeModePreferenceWidget
 import eu.kanade.presentation.more.settings.widget.AppThemePreferenceWidget
 import eu.kanade.tachiyomi.util.system.toast
@@ -86,6 +91,41 @@ object SettingsAppearanceScreen : SearchableSettings {
                     preference = amoledPref,
                     title = stringResource(MR.strings.pref_dark_theme_pure_black),
                     visible = themeMode != ThemeMode.LIGHT,
+                    onValueChanged = {
+                        (context as? Activity)?.let { ActivityCompat.recreate(it) }
+                        true
+                    },
+                ),
+                Preference.PreferenceItem.ListPreference(
+                    preference = uiPreferences.glassStyle,
+                    entries = GlassStyle.entries.associateWith { stringResource(it.titleRes) },
+                    title = stringResource(MR.strings.pref_glass_style),
+                    onValueChanged = { style ->
+                        // Aero comes as a set: matching colors and backdrop, both changeable afterwards
+                        if (style == GlassStyle.FRUTIGER_AERO) {
+                            appThemePref.set(AppTheme.FRUTIGER_AERO)
+                            uiPreferences.libraryBackground.set(LibraryBackground.AERO)
+                        }
+                        (context as? Activity)?.let { ActivityCompat.recreate(it) }
+                        true
+                    },
+                ),
+                Preference.PreferenceItem.CustomPreference(
+                    title = stringResource(MR.strings.pref_accent_color),
+                ) {
+                    val accent by uiPreferences.accentColor.collectAsState()
+                    AccentColorPreferenceWidget(
+                        value = accent,
+                        onValueChange = {
+                            uiPreferences.accentColor.set(it)
+                            (context as? Activity)?.let { activity -> ActivityCompat.recreate(activity) }
+                        },
+                    )
+                },
+                Preference.PreferenceItem.ListPreference(
+                    preference = uiPreferences.appFont,
+                    entries = AppFont.entries.associateWith { stringResource(it.titleRes) },
+                    title = stringResource(MR.strings.pref_app_font),
                     onValueChanged = {
                         (context as? Activity)?.let { ActivityCompat.recreate(it) }
                         true

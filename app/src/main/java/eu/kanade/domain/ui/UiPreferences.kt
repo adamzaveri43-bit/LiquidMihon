@@ -3,7 +3,9 @@ package eu.kanade.domain.ui
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
+import eu.kanade.domain.ui.model.AppFont
 import eu.kanade.domain.ui.model.AppTheme
+import eu.kanade.domain.ui.model.GlassStyle
 import eu.kanade.domain.ui.model.LibraryBackground
 import eu.kanade.domain.ui.model.TabletUiMode
 import eu.kanade.domain.ui.model.ThemeMode
@@ -29,6 +31,13 @@ class UiPreferences(
     )
 
     val themeDarkAmoled: Preference<Boolean> = preferenceStore.getBoolean("pref_theme_dark_amoled_key", false)
+
+    val glassStyle: Preference<GlassStyle> = preferenceStore.getEnum("pref_glass_style", GlassStyle.LIQUID_GLASS)
+
+    /** ARGB accent color overriding the theme's, 0 for the theme's own. */
+    val accentColor: Preference<Int> = preferenceStore.getInt("pref_accent_color", 0)
+
+    val appFont: Preference<AppFont> = preferenceStore.getEnum("pref_app_font", AppFont.DEFAULT)
 
     val libraryBackground: Preference<LibraryBackground> = preferenceStore.getEnum(
         "pref_library_background",

@@ -20,6 +20,10 @@ The format is a modified version of [Keep a Changelog](https://keepachangelog.co
 - Add custom gradient library backgrounds, a separate toggle for gradient animation, GIF backgrounds and image blur
 - Add Cover flow option to tint the library background with the focused cover's colors
 - Improve Liquid Glass: clearer glass with lens refraction at the edges (Android 13+), iOS style scroll edge blur under top bars, glass toolbar buttons, floating glass selection bars and snackbars, and a frosted backdrop behind dialogs
+- Add Glass style setting so Liquid Glass works with every theme, plus a glossy Frutiger Aero style with its own theme and bubbly sky background
+- Add accent color picker and app-wide font choice (Appearance)
+- Fix background gradients barely moving and stopping when system animations are reduced
+- Fix the Cover flow reflection ending in a visible edge
 
 ## [v0.21.1] - 2026-10-12
 ### Fixed

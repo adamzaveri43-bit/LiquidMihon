@@ -49,12 +49,16 @@ internal class MonetCompatColorScheme(seed: Color) : BaseColorScheme() {
     override val darkScheme = generateColorSchemeFromSeed(seed = seed, dark = true)
 
     companion object {
-        fun generateColorSchemeFromSeed(seed: Color, dark: Boolean): ColorScheme {
+        fun generateColorSchemeFromSeed(
+            seed: Color,
+            dark: Boolean,
+            style: PaletteStyle = PaletteStyle.Expressive,
+        ): ColorScheme {
             return DynamicScheme(
                 seedColor = seed,
                 isDark = dark,
                 specVersion = ColorSpec.SpecVersion.SPEC_2025,
-                style = PaletteStyle.Expressive,
+                style = style,
             )
                 .toColorScheme(isAmoled = false)
         }

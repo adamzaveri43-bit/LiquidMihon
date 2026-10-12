@@ -4,12 +4,7 @@ import android.content.Context
 import android.os.Build
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -25,11 +20,14 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
@@ -52,6 +50,7 @@ import java.io.File
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
+import kotlin.random.Random
 
 /**
  * How the library is decorated, provided by the library screen to its components.
@@ -94,6 +93,7 @@ fun LibraryBackgroundLayer(
                 animate = animate,
                 blur = blur,
             )
+            background == LibraryBackground.AERO -> AeroBackground(animate = animate, isDark = isDark)
             background == LibraryBackground.CUSTOM_GRADIENT -> GradientBackground(
                 blobs = gradientColors.ifEmpty { DefaultCustomGradient }.toBlobs(),
                 animate = animate,
@@ -153,7 +153,7 @@ private fun CustomImageBackground(imagePath: String, animate: Boolean, blur: Int
             }
             .build()
     }
-    val zoom = animatedPhase(animate = animate, durationMillis = 30_000)
+    val time = rememberAnimationTime(animate)
     AsyncImage(
         model = File(imagePath),
         imageLoader = imageLoader,
@@ -164,7 +164,8 @@ private fun CustomImageBackground(imagePath: String, animate: Boolean, blur: Int
             .graphicsLayer {
                 // Slow "Ken Burns" drift, and enough overscan to hide the blur's soft edges
                 val overscan = if (blur > 0) 1.12f else 1.04f
-                val scale = overscan + 0.06f * zoom.value
+                val zoom = 0.5f + 0.5f * sin(time.value * 2 * PI.toFloat() / 30f)
+                val scale = overscan + 0.06f * zoom
                 scaleX = scale
                 scaleY = scale
             }
@@ -178,17 +179,18 @@ private fun GradientBackground(
     animate: Boolean,
     blobAlpha: Float,
 ) {
-    val phase = animatedPhase(animate = animate, durationMillis = 24_000)
+    val time = rememberAnimationTime(animate)
     Canvas(modifier = Modifier.fillMaxSize()) {
-        val angle = phase.value * 2 * PI
+        val t = time.value
         blobs.forEachIndexed { index, blob ->
-            // Each blob orbits its anchor on its own path so the mesh slowly morphs
-            val drift = size.minDimension * 0.08f
+            // Each blob orbits its anchor at its own pace and breathes, so the mesh keeps morphing
+            val speed = 0.32f + 0.07f * index
+            val drift = size.minDimension * 0.22f
             val center = Offset(
-                x = size.width * blob.x + drift * cos(angle + index * 1.7).toFloat(),
-                y = size.height * blob.y + drift * sin(angle * (1 + index % 2) + index).toFloat(),
+                x = size.width * blob.x + drift * cos(t * speed + index * 1.7f),
+                y = size.height * blob.y + drift * sin(t * speed * 1.3f + index * 2.3f),
             )
-            val radius = size.maxDimension * blob.radius
+            val radius = size.maxDimension * blob.radius * (1f + 0.12f * sin(t * 0.5f + index))
             drawRect(
                 brush = Brush.radialGradient(
                     colors = listOf(blob.color.copy(alpha = blobAlpha.coerceAtMost(1f)), Color.Transparent),
@@ -201,20 +203,113 @@ private fun GradientBackground(
 }
 
 /**
- * A 0..1..0 value cycling forever when [animate] is set, else a constant.
+ * Frutiger Aero: bright sky over a green hill, with glossy bubbles drifting upwards.
  */
 @Composable
-private fun animatedPhase(animate: Boolean, durationMillis: Int): State<Float> {
-    if (!animate) return remember { mutableFloatStateOf(0.5f) }
-    return rememberInfiniteTransition(label = "libraryBackground").animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = durationMillis, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "libraryBackgroundPhase",
+private fun AeroBackground(animate: Boolean, isDark: Boolean) {
+    val time = rememberAnimationTime(animate)
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val t = time.value
+        val sky = if (isDark) {
+            listOf(Color(0xFF02142A), Color(0xFF07406B), Color(0xFF0B6E8C))
+        } else {
+            listOf(Color(0xFF3BA8F5), Color(0xFF9ED9FF), Color(0xFFEAF8FF))
+        }
+        drawRect(Brush.verticalGradient(sky))
+        // Aurora swooshes
+        drawRect(
+            brush = Brush.radialGradient(
+                colors = listOf(Color(0xFF7CF3E4).copy(alpha = if (isDark) 0.35f else 0.45f), Color.Transparent),
+                center = Offset(size.width * (0.2f + 0.08f * sin(t * 0.3f)), size.height * 0.3f),
+                radius = size.maxDimension * 0.5f,
+            ),
+        )
+        drawRect(
+            brush = Brush.radialGradient(
+                colors = listOf(Color.White.copy(alpha = if (isDark) 0.08f else 0.5f), Color.Transparent),
+                center = Offset(size.width * (0.85f + 0.06f * cos(t * 0.25f)), size.height * 0.12f),
+                radius = size.maxDimension * 0.35f,
+            ),
+        )
+        // Rolling green hill
+        val hillTop = size.height * 0.8f
+        drawOval(
+            brush = Brush.verticalGradient(
+                colors = if (isDark) {
+                    listOf(Color(0xFF2E8B57), Color(0xFF0B3D2A))
+                } else {
+                    listOf(Color(0xFF9BE15D), Color(0xFF2E9E3E))
+                },
+                startY = hillTop,
+                endY = size.height,
+            ),
+            topLeft = Offset(-size.width * 0.4f, hillTop),
+            size = Size(size.width * 1.8f, size.height * 0.6f),
+        )
+        // Bubbles
+        aeroBubbles.forEach { bubble ->
+            val travel = ((t * bubble.speed + bubble.phase) % 1.3f)
+            val y = size.height * (1.15f - travel)
+            val x = size.width * bubble.x + size.width * 0.03f * sin(t * 0.8f + bubble.phase * 6f)
+            val r = size.minDimension * bubble.size
+            val center = Offset(x, y)
+            drawCircle(
+                brush = Brush.radialGradient(
+                    0f to Color.White.copy(alpha = 0.04f),
+                    0.75f to Color.White.copy(alpha = 0.10f),
+                    1f to Color.White.copy(alpha = 0.32f),
+                    center = center,
+                    radius = r,
+                ),
+                radius = r,
+                center = center,
+            )
+            drawCircle(
+                color = Color.White.copy(alpha = 0.45f),
+                radius = r,
+                center = center,
+                style = Stroke(1.dp.toPx()),
+            )
+            drawOval(
+                color = Color.White.copy(alpha = 0.6f),
+                topLeft = Offset(x - r * 0.55f, y - r * 0.7f),
+                size = Size(r * 0.6f, r * 0.35f),
+            )
+        }
+    }
+}
+
+@Immutable
+private data class Bubble(val x: Float, val size: Float, val speed: Float, val phase: Float)
+
+private val aeroBubbles = List(14) { index ->
+    val random = Random(index * 7919)
+    Bubble(
+        x = random.nextFloat(),
+        size = 0.03f + random.nextFloat() * 0.07f,
+        speed = 0.02f + random.nextFloat() * 0.03f,
+        phase = random.nextFloat() * 1.3f,
     )
+}
+
+/**
+ * Seconds since this was first shown, advancing every frame while [animate] is set.
+ *
+ * Driven by the frame clock directly so it keeps moving even when system animations are turned down.
+ */
+@Composable
+private fun rememberAnimationTime(animate: Boolean): State<Float> {
+    val time = remember { mutableFloatStateOf(0f) }
+    if (animate) {
+        LaunchedEffect(Unit) {
+            val offset = time.floatValue
+            val start = withFrameNanos { it }
+            while (true) {
+                withFrameNanos { time.floatValue = offset + (it - start) / 1_000_000_000f }
+            }
+        }
+    }
+    return time
 }
 
 @Immutable
@@ -256,6 +351,7 @@ private val gradientBlobs = mapOf(
 /** Colors for previewing a background option. */
 internal fun LibraryBackground.previewColors(customColors: List<Color>): List<Color>? = when (this) {
     LibraryBackground.CUSTOM_GRADIENT -> customColors.ifEmpty { DefaultCustomGradient }
+    LibraryBackground.AERO -> listOf(Color(0xFF3BA8F5), Color(0xFF9ED9FF), Color(0xFF9BE15D))
     else -> gradientBlobs[this]?.map { it.color }
 }
 

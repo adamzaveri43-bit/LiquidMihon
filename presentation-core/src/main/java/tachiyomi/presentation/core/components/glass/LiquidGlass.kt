@@ -56,6 +56,11 @@ import androidx.compose.ui.unit.dp
 val LocalLiquidGlass = staticCompositionLocalOf { false }
 
 /**
+ * Glossy Frutiger Aero flavour of the glass: aqua tint and a hard specular band over the top half.
+ */
+val LocalGlassAero = staticCompositionLocalOf { false }
+
+/**
  * The content glass chrome (top bars, bottom bars) of the closest Scaffold should refract, if any.
  */
 val LocalLiquidGlassBackdrop = staticCompositionLocalOf<LiquidGlassBackdrop?> { null }
@@ -91,6 +96,7 @@ data class LiquidGlassColors(
     val sheen: Color,
     val rim: Color,
     val shadow: Color,
+    val gloss: Boolean = false,
 )
 
 object LiquidGlassDefaults {
@@ -108,6 +114,16 @@ object LiquidGlassDefaults {
             !isBackdropBlurSupported -> 0.92f
             isDark -> 0.36f
             else -> 0.42f
+        }
+        if (LocalGlassAero.current) {
+            return LiquidGlassColors(
+                tint = (if (isDark) Color(0xFF0E3A5C) else Color(0xFFBFE6FF))
+                    .copy(alpha = if (isBackdropBlurSupported) 0.42f else 0.92f),
+                sheen = Color.White.copy(alpha = if (isDark) 0.38f else 0.75f),
+                rim = Color.White.copy(alpha = if (isDark) 0.55f else 0.95f),
+                shadow = Color(0xFF003A66).copy(alpha = 0.35f),
+                gloss = true,
+            )
         }
         val tint = if (isDark) Color(0xFF1C1C22) else Color.White
         return if (isDark) {
@@ -164,11 +180,22 @@ fun Modifier.liquidGlass(
         .then(refraction)
         .background(colors.tint)
         .background(
-            Brush.verticalGradient(
-                0f to colors.sheen,
-                0.4f to Color.Transparent,
-                1f to colors.sheen.copy(alpha = colors.sheen.alpha * 0.4f),
-            ),
+            if (colors.gloss) {
+                // Classic Aero gloss: bright top half ending in a crisp horizon, soft glow at the bottom
+                Brush.verticalGradient(
+                    0f to colors.sheen,
+                    0.48f to colors.sheen.copy(alpha = colors.sheen.alpha * 0.35f),
+                    0.5f to Color.Transparent,
+                    0.85f to Color.Transparent,
+                    1f to colors.sheen.copy(alpha = colors.sheen.alpha * 0.45f),
+                )
+            } else {
+                Brush.verticalGradient(
+                    0f to colors.sheen,
+                    0.4f to Color.Transparent,
+                    1f to colors.sheen.copy(alpha = colors.sheen.alpha * 0.4f),
+                )
+            },
         )
         .border(
             width = 1.dp,
