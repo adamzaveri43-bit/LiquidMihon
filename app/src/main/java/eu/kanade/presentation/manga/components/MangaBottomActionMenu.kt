@@ -17,18 +17,22 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.ZeroCornerSize
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -63,6 +67,10 @@ import mihon.icons.materialsymbols.rounded.MoreVert
 import mihon.icons.materialsymbols.rounded.RemoveDone
 import mihon.icons.materialsymbols.rounded.SwapCalls
 import tachiyomi.i18n.MR
+import tachiyomi.presentation.core.components.glass.LiquidGlassDefaults
+import tachiyomi.presentation.core.components.glass.LocalLiquidGlass
+import tachiyomi.presentation.core.components.glass.LocalLiquidGlassBackdrop
+import tachiyomi.presentation.core.components.glass.liquidGlass
 import tachiyomi.presentation.core.i18n.stringResource
 import kotlin.time.Duration.Companion.seconds
 
@@ -84,11 +92,7 @@ fun MangaBottomActionMenu(
         exit = shrinkVertically(shrinkTowards = Alignment.Bottom),
     ) {
         val scope = rememberCoroutineScope()
-        Surface(
-            modifier = modifier,
-            shape = MaterialTheme.shapes.large.copy(bottomEnd = ZeroCornerSize, bottomStart = ZeroCornerSize),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        ) {
+        ActionMenuSurface(modifier = modifier) {
             val haptic = LocalHapticFeedback.current
             val confirm = remember { mutableStateListOf(false, false, false, false, false, false, false) }
             var resetJob by remember { mutableStateOf<Job?>(null) }
@@ -245,11 +249,7 @@ fun LibraryBottomActionMenu(
         exit = shrinkVertically(animationSpec = tween()),
     ) {
         val scope = rememberCoroutineScope()
-        Surface(
-            modifier = modifier,
-            shape = MaterialTheme.shapes.large.copy(bottomEnd = ZeroCornerSize, bottomStart = ZeroCornerSize),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        ) {
+        ActionMenuSurface(modifier = modifier) {
             val haptic = LocalHapticFeedback.current
             val confirm = remember { mutableStateListOf(false, false, false, false, false, false) }
             var resetJob by remember { mutableStateOf<Job?>(null) }
@@ -355,3 +355,39 @@ fun LibraryBottomActionMenu(
 }
 
 private val BottomBarMenuDpOffset = DpOffset(0.dp, 0.dp)
+
+/**
+ * Bottom sheet style surface, or a floating glass panel with the Liquid Glass theme.
+ */
+@Composable
+private fun ActionMenuSurface(
+    modifier: Modifier,
+    content: @Composable () -> Unit,
+) {
+    if (LocalLiquidGlass.current) {
+        val shape = RoundedCornerShape(28.dp)
+        Box(
+            modifier = modifier
+                .navigationBarsPadding()
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .liquidGlass(
+                    shape = shape,
+                    colors = LiquidGlassDefaults.colors(),
+                    backdrop = LocalLiquidGlassBackdrop.current,
+                    cornerRadius = 28.dp,
+                    shadowElevation = 12.dp,
+                ),
+        ) {
+            CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
+                content()
+            }
+        }
+    } else {
+        Surface(
+            modifier = modifier,
+            shape = MaterialTheme.shapes.large.copy(bottomEnd = ZeroCornerSize, bottomStart = ZeroCornerSize),
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            content = content,
+        )
+    }
+}

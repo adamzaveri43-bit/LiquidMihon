@@ -48,7 +48,7 @@ internal object LiquidGlassColorScheme : BaseColorScheme() {
         surfaceContainerLowest = Color(0xFF0E0E12),
         surfaceContainerLow = Color(0xFF141419),
         surfaceContainer = Color(0xFF1C1C22), // Navigation bar background
-        surfaceContainerHigh = Color(0xFF24242B),
+        surfaceContainerHigh = Color(0xE624242B), // Dialogs & sheets: translucent over the blurred window behind
         surfaceContainerHighest = Color(0xFF2C2C34),
     )
 
@@ -84,7 +84,7 @@ internal object LiquidGlassColorScheme : BaseColorScheme() {
         surfaceContainerLowest = Color(0xFFFFFFFF),
         surfaceContainerLow = Color(0xFFF9F9FC),
         surfaceContainer = Color(0xFFFFFFFF), // Navigation bar background
-        surfaceContainerHigh = Color(0xFFFFFFFF),
+        surfaceContainerHigh = Color(0xE6FFFFFF), // Dialogs & sheets: translucent over the blurred window behind
         surfaceContainerHighest = Color(0xFFFFFFFF),
     )
 }

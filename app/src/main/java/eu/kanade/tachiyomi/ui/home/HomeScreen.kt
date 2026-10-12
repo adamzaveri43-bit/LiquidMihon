@@ -51,9 +51,6 @@ import cafe.adriel.voyager.navigator.tab.TabNavigator
 import eu.kanade.presentation.components.LiquidGlassNavigationBar
 import eu.kanade.presentation.components.LiquidGlassNavigationBarDefaults
 import eu.kanade.presentation.components.LiquidGlassNavigationBarItem
-import eu.kanade.presentation.components.liquidGlassSource
-import eu.kanade.presentation.components.rememberLiquidGlassBackdrop
-import eu.kanade.presentation.theme.LocalLiquidGlass
 import eu.kanade.presentation.util.Screen
 import eu.kanade.presentation.util.isTabletUi
 import eu.kanade.tachiyomi.ui.browse.BrowseTab
@@ -72,6 +69,9 @@ import mihon.app.di.appGraph
 import soup.compose.material.motion.animation.materialFadeThroughIn
 import soup.compose.material.motion.animation.materialFadeThroughOut
 import tachiyomi.i18n.MR
+import tachiyomi.presentation.core.components.glass.LocalLiquidGlass
+import tachiyomi.presentation.core.components.glass.liquidGlassSource
+import tachiyomi.presentation.core.components.glass.rememberLiquidGlassBackdrop
 import tachiyomi.presentation.core.components.material.LocalFloatingBottomBarPadding
 import tachiyomi.presentation.core.i18n.pluralStringResource
 

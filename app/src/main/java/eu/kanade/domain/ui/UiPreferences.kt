@@ -39,6 +39,22 @@ class UiPreferences(
 
     val libraryAnimations: Preference<Boolean> = preferenceStore.getBoolean("pref_library_animations", true)
 
+    val libraryBackgroundAnimated: Preference<Boolean> = preferenceStore.getBoolean(
+        "pref_library_background_animated",
+        true,
+    )
+
+    /** Comma separated ARGB hex colors of the custom gradient. */
+    val libraryGradientColors: Preference<String> = preferenceStore.getString("pref_library_gradient_colors", "")
+
+    /** Blur radius in dp applied to an image background. */
+    val libraryBackgroundBlur: Preference<Int> = preferenceStore.getInt("pref_library_background_blur", 0)
+
+    val libraryCoverFlowAdaptiveBackground: Preference<Boolean> = preferenceStore.getBoolean(
+        "pref_library_cover_flow_adaptive_background",
+        true,
+    )
+
     val relativeTime: Preference<Boolean> = preferenceStore.getBoolean("relative_time_v2", true)
 
     val dateFormat: Preference<String> = preferenceStore.getString("app_date_format", "")

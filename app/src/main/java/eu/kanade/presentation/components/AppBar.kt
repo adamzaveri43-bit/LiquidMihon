@@ -2,9 +2,13 @@ package eu.kanade.presentation.components
 
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.TextFieldLineLimits
@@ -58,6 +62,11 @@ import mihon.icons.materialsymbols.rounded.Close
 import mihon.icons.materialsymbols.rounded.MoreVert
 import mihon.icons.materialsymbols.rounded.Search
 import tachiyomi.i18n.MR
+import tachiyomi.presentation.core.components.glass.LiquidGlassDefaults
+import tachiyomi.presentation.core.components.glass.LocalLiquidGlass
+import tachiyomi.presentation.core.components.glass.LocalLiquidGlassBackdrop
+import tachiyomi.presentation.core.components.glass.liquidGlass
+import tachiyomi.presentation.core.components.glass.liquidGlassEdge
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.clearFocusOnSoftKeyboardHide
 import tachiyomi.presentation.core.util.runOnEnterKeyPressed
@@ -131,33 +140,82 @@ fun AppBar(
 
     scrollBehavior: TopAppBarScrollBehavior? = null,
 ) {
+    // iOS 26 style: content blurs and fades under the bar, controls sit in floating glass
+    val glass = LocalLiquidGlass.current
+    val glassEdge = glass && backgroundColor == null
+    val backdrop = LocalLiquidGlassBackdrop.current
+    val glassColors = LiquidGlassDefaults.colors()
     Column(
-        modifier = modifier,
+        modifier = modifier.then(
+            if (glassEdge) {
+                Modifier.liquidGlassEdge(
+                    backdrop = backdrop,
+                    tint = MaterialTheme.colorScheme.background.copy(alpha = if (isActionMode) 0.9f else 0.7f),
+                )
+            } else {
+                Modifier
+            },
+        ),
     ) {
         TopAppBar(
             navigationIcon = {
-                if (isActionMode) {
-                    IconButton(onClick = onCancelActionMode) {
-                        Icon(
-                            imageVector = MaterialSymbols.Rounded.Close,
-                            contentDescription = stringResource(MR.strings.action_cancel),
-                        )
+                val navigationButton: (@Composable () -> Unit)? = if (isActionMode) {
+                    {
+                        IconButton(onClick = onCancelActionMode) {
+                            Icon(
+                                imageVector = MaterialSymbols.Rounded.Close,
+                                contentDescription = stringResource(MR.strings.action_cancel),
+                            )
+                        }
                     }
                 } else {
                     navigateUp?.let {
-                        IconButton(onClick = it) {
-                            UpIcon(navigationIcon = navigationIcon)
+                        {
+                            IconButton(onClick = it) {
+                                UpIcon(navigationIcon = navigationIcon)
+                            }
                         }
+                    }
+                }
+                if (navigationButton != null) {
+                    if (glass) {
+                        Box(
+                            modifier = Modifier
+                                .padding(start = 4.dp)
+                                .liquidGlass(shape = CircleShape, colors = glassColors, backdrop = backdrop),
+                        ) {
+                            navigationButton()
+                        }
+                    } else {
+                        navigationButton()
                     }
                 }
             },
             title = titleContent,
-            actions = actions,
-            colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = backgroundColor ?: MaterialTheme.colorScheme.surfaceColorAtElevation(
-                    elevation = if (isActionMode) 3.dp else 0.dp,
-                ),
-            ),
+            actions = {
+                if (glass) {
+                    Row(
+                        modifier = Modifier
+                            .padding(end = 4.dp)
+                            .liquidGlass(shape = CircleShape, colors = glassColors, backdrop = backdrop),
+                        content = actions,
+                    )
+                } else {
+                    actions()
+                }
+            },
+            colors = if (glassEdge) {
+                TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent,
+                    scrolledContainerColor = Color.Transparent,
+                )
+            } else {
+                TopAppBarDefaults.topAppBarColors(
+                    containerColor = backgroundColor ?: MaterialTheme.colorScheme.surfaceColorAtElevation(
+                        elevation = if (isActionMode) 3.dp else 0.dp,
+                    ),
+                )
+            },
             scrollBehavior = scrollBehavior,
         )
     }

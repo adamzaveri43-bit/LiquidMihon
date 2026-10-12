@@ -9,7 +9,6 @@ import androidx.compose.material3.Shapes
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import eu.kanade.domain.ui.model.AppTheme
@@ -31,6 +30,7 @@ import eu.kanade.presentation.theme.colorscheme.TokyoNightColorScheme
 import eu.kanade.presentation.theme.colorscheme.YinYangColorScheme
 import eu.kanade.presentation.theme.colorscheme.YotsubaColorScheme
 import mihon.app.di.appGraph
+import tachiyomi.presentation.core.components.glass.LocalLiquidGlass
 
 @Composable
 fun TachiyomiTheme(
@@ -77,12 +77,6 @@ private fun BaseTachiyomiTheme(
         CompositionLocalProvider(LocalLiquidGlass provides isLiquidGlass, content = content)
     }
 }
-
-/**
- * Whether the Liquid Glass theme is active, i.e. chrome such as the bottom navigation should be drawn as
- * floating translucent glass instead of opaque Material surfaces.
- */
-val LocalLiquidGlass = staticCompositionLocalOf { false }
 
 private val DefaultShapes = Shapes()
 

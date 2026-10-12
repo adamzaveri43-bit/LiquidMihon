@@ -27,6 +27,10 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import tachiyomi.presentation.core.components.glass.LocalLiquidGlass
+import tachiyomi.presentation.core.components.glass.LocalLiquidGlassBackdrop
+import tachiyomi.presentation.core.components.glass.liquidGlassSource
+import tachiyomi.presentation.core.components.glass.rememberLiquidGlassBackdrop
 
 @Composable
 fun Scaffold(
@@ -47,15 +51,27 @@ fun Scaffold(
     var fabHeight by remember { mutableIntStateOf(0) }
     val density = LocalDensity.current
     val floatingBottomBarPadding by rememberUpdatedState(LocalFloatingBottomBarPadding.current)
+    // Glass bars refract the content scrolling underneath them
+    val backdrop = if (LocalLiquidGlass.current) rememberLiquidGlassBackdrop() else null
 
     androidx.compose.material3.Scaffold(
         modifier = modifier.nestedScroll(topBarScrollBehavior.nestedScrollConnection),
-        topBar = { topBar(topBarScrollBehavior) },
-        bottomBar = bottomBar,
+        topBar = {
+            CompositionLocalProvider(LocalLiquidGlassBackdrop provides backdrop) {
+                topBar(topBarScrollBehavior)
+            }
+        },
+        bottomBar = {
+            CompositionLocalProvider(LocalLiquidGlassBackdrop provides backdrop) {
+                bottomBar()
+            }
+        },
         snackbarHost = {
             // When a FAB is shown the snackbar is already placed above it
             Box(Modifier.padding(bottom = if (fabHeight == 0) floatingBottomBarPadding else 0.dp)) {
-                snackbarHost()
+                CompositionLocalProvider(LocalLiquidGlassBackdrop provides backdrop) {
+                    snackbarHost()
+                }
             }
         },
         floatingActionButton = {
@@ -80,7 +96,13 @@ fun Scaffold(
         }
         // Only the outermost Scaffold should account for the floating bar
         CompositionLocalProvider(LocalFloatingBottomBarPadding provides 0.dp) {
-            content(paddingValues)
+            if (backdrop != null) {
+                Box(modifier = Modifier.liquidGlassSource(backdrop)) {
+                    content(paddingValues)
+                }
+            } else {
+                content(paddingValues)
+            }
         }
     }
 }

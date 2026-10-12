@@ -10,5 +10,6 @@ enum class LibraryBackground(val titleRes: StringResource) {
     OCEAN(MR.strings.library_background_ocean),
     FOREST(MR.strings.library_background_forest),
     NEBULA(MR.strings.library_background_nebula),
+    CUSTOM_GRADIENT(MR.strings.library_background_custom_gradient),
     CUSTOM(MR.strings.library_background_custom),
 }

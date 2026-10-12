@@ -1,8 +1,6 @@
 package eu.kanade.presentation.library.components
 
-import android.os.Build
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.Crossfade
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -33,12 +31,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
@@ -48,6 +47,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -95,25 +95,30 @@ internal fun LibraryCoverFlow(
 
     val current = items.getOrNull(pagerState.currentPage.coerceIn(0, (items.size - 1).coerceAtLeast(0)))
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        // Ambient glow of the focused cover
-        if (current != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            Crossfade(
-                targetState = current.libraryManga.manga.id,
-                label = "coverFlowGlow",
-                modifier = Modifier.fillMaxSize(),
-            ) { mangaId ->
-                val item = items.firstOrNull { it.libraryManga.manga.id == mangaId } ?: return@Crossfade
-                MangaCover.Book(
-                    data = item.coverData(),
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .graphicsLayer { alpha = 0.35f }
-                        .blur(72.dp),
-                )
+    // Tint the library background with the settled cover's colors
+    val coverColors = LocalLibraryCoverColors.current
+    if (coverColors != null) {
+        val context = LocalContext.current
+        val colorCache = remember { mutableMapOf<Long, List<Color>>() }
+        val lastWritten = remember { mutableListOf<List<Color>>() }
+        val settled = items.getOrNull(pagerState.settledPage)
+        LaunchedEffect(settled?.libraryManga?.id) {
+            val item = settled ?: return@LaunchedEffect
+            val id = item.libraryManga.manga.id
+            val colors = colorCache[id] ?: extractCoverColors(context, item.coverData())?.also { colorCache[id] = it }
+            if (colors != null) {
+                coverColors.value = colors
+                lastWritten.clear()
+                lastWritten.add(colors)
             }
         }
+        DisposableEffect(coverColors) {
+            // Only clear if another category's cover flow hasn't taken over since
+            onDispose { if (coverColors.value === lastWritten.firstOrNull()) coverColors.value = null }
+        }
+    }
 
+    Box(modifier = Modifier.fillMaxSize()) {
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()

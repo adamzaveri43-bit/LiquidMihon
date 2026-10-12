@@ -9,12 +9,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
@@ -39,7 +39,9 @@ import eu.kanade.presentation.library.components.LibraryBackgroundLayer
 import eu.kanade.presentation.library.components.LibraryContent
 import eu.kanade.presentation.library.components.LibraryStyle
 import eu.kanade.presentation.library.components.LibraryToolbar
+import eu.kanade.presentation.library.components.LocalLibraryCoverColors
 import eu.kanade.presentation.library.components.LocalLibraryStyle
+import eu.kanade.presentation.library.components.parseGradientColors
 import eu.kanade.presentation.manga.components.LibraryBottomActionMenu
 import eu.kanade.presentation.more.onboarding.GETTING_STARTED_URL
 import eu.kanade.presentation.util.Tab
@@ -65,6 +67,7 @@ import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.library.model.LibraryManga
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.MR
+import tachiyomi.presentation.core.components.glass.GlassSnackbarHost
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.screens.EmptyScreen
@@ -121,8 +124,14 @@ data object LibraryTab : Tab {
         val libraryBackground by uiPreferences.libraryBackground.collectAsState()
         val libraryBackgroundImage by uiPreferences.libraryBackgroundImage.collectAsState()
         val libraryAnimations by uiPreferences.libraryAnimations.collectAsState()
+        val libraryBackgroundAnimated by uiPreferences.libraryBackgroundAnimated.collectAsState()
+        val libraryGradientColors by uiPreferences.libraryGradientColors.collectAsState()
+        val libraryBackgroundBlur by uiPreferences.libraryBackgroundBlur.collectAsState()
+        val adaptiveBackground by uiPreferences.libraryCoverFlowAdaptiveBackground.collectAsState()
+        val coverColors = remember { mutableStateOf<List<Color>?>(null) }
+        val activeCoverColors = coverColors.value.takeIf { adaptiveBackground }
         val libraryStyle = LibraryStyle(
-            hasBackground = libraryBackground != LibraryBackground.NONE,
+            hasBackground = libraryBackground != LibraryBackground.NONE || activeCoverColors != null,
             animations = libraryAnimations,
         )
 
@@ -130,9 +139,15 @@ data object LibraryTab : Tab {
             LibraryBackgroundLayer(
                 background = libraryBackground,
                 imagePath = libraryBackgroundImage,
-                animate = libraryAnimations,
+                gradientColors = remember(libraryGradientColors) { parseGradientColors(libraryGradientColors) },
+                animate = libraryBackgroundAnimated,
+                blur = libraryBackgroundBlur,
+                coverColors = activeCoverColors,
             )
-            CompositionLocalProvider(LocalLibraryStyle provides libraryStyle) {
+            CompositionLocalProvider(
+                LocalLibraryStyle provides libraryStyle,
+                LocalLibraryCoverColors provides coverColors.takeIf { adaptiveBackground },
+            ) {
                 Scaffold(
                     containerColor = if (libraryStyle.hasBackground) {
                         Color.Transparent
@@ -189,7 +204,7 @@ data object LibraryTab : Tab {
                             },
                         )
                     },
-                    snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+                    snackbarHost = { GlassSnackbarHost(hostState = snackbarHostState) },
                 ) { contentPadding ->
                     when {
                         state.isLoading -> {

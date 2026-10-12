@@ -17,6 +17,9 @@ The format is a modified version of [Keep a Changelog](https://keepachangelog.co
 - Add Cover flow library display mode
 - Add library animations: items spring in as they appear and animate when reordered
 - Add Reviews screen to manga (⋮ → Reviews) with AniList community reviews, score, rankings and themes
+- Add custom gradient library backgrounds, a separate toggle for gradient animation, GIF backgrounds and image blur
+- Add Cover flow option to tint the library background with the focused cover's colors
+- Improve Liquid Glass: clearer glass with lens refraction at the edges (Android 13+), iOS style scroll edge blur under top bars, glass toolbar buttons, floating glass selection bars and snackbars, and a frosted backdrop behind dialogs
 - Add experimental high quality reader renderer (Settings → Advanced → Use high quality renderer) with better image scaling, page transition animations, dual page view and display cutout handling ([@wwww-wwww](https://github.com/wwww-wwww)) ([#3388](https://github.com/mihonapp/mihon/pull/3388))
   - Match background and transition page colors to the old reader ([@AntsyLich](https://github.com/AntsyLich)) ([#3765](https://github.com/mihonapp/mihon/pull/3765))
   - Support the Fit width, Fit height and Original size scale types and the zoom start position ([@wwww-wwww](https://github.com/wwww-wwww)) ([#3801](https://github.com/mihonapp/mihon/pull/3801))
