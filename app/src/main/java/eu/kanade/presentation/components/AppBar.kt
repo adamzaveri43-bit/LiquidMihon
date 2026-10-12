@@ -67,6 +67,7 @@ import tachiyomi.presentation.core.components.glass.LocalLiquidGlassBackdrop
 import tachiyomi.presentation.core.components.glass.LocalLiquidGlassEdgeProvided
 import tachiyomi.presentation.core.components.glass.liquidGlass
 import tachiyomi.presentation.core.components.glass.liquidGlassEdge
+import tachiyomi.presentation.core.components.glass.liquidGlassEdgeTint
 import tachiyomi.presentation.core.components.material.Icon
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.clearFocusOnSoftKeyboardHide
@@ -147,13 +148,27 @@ fun AppBar(
     // A surrounding container may already draw the edge for the whole top bar stack
     val drawGlassEdge = glassEdge && !LocalLiquidGlassEdgeProvided.current
     val backdrop = LocalLiquidGlassBackdrop.current
-    val glassColors = LiquidGlassDefaults.colors()
+    // Buttons sit on the bar's tint, so give them a lighter fill and a clear rim to stand out
+    val glassColors = LiquidGlassDefaults.colors().let { base ->
+        base.copy(
+            tint = if (base.gloss) {
+                base.tint.copy(alpha = 0.7f)
+            } else {
+                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.16f)
+            },
+            rim = base.rim.copy(alpha = base.rim.alpha.coerceAtLeast(0.55f)),
+        )
+    }
     Column(
         modifier = modifier.then(
             if (drawGlassEdge) {
                 Modifier.liquidGlassEdge(
                     backdrop = backdrop,
-                    tint = MaterialTheme.colorScheme.background.copy(alpha = if (isActionMode) 0.9f else 0.7f),
+                    tint = if (isActionMode) {
+                        MaterialTheme.colorScheme.background.copy(alpha = 0.92f)
+                    } else {
+                        liquidGlassEdgeTint()
+                    },
                 )
             } else {
                 Modifier

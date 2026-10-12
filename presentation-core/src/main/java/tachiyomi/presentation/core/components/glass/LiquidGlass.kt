@@ -19,7 +19,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
@@ -47,7 +46,6 @@ import androidx.compose.ui.node.GlobalPositionAwareModifierNode
 import androidx.compose.ui.node.ModifierNodeElement
 import androidx.compose.ui.node.invalidateDraw
 import androidx.compose.ui.node.requireGraphicsContext
-import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -172,7 +170,7 @@ fun Modifier.liquidGlass(
         Modifier
     }
     val refraction = if (backdrop != null && LiquidGlassDefaults.isBackdropBlurSupported) {
-        BackdropElement(backdrop, blurRadius, cornerRadius, lens = true, fade = false)
+        BackdropElement(backdrop, blurRadius, cornerRadius, lens = true)
     } else {
         Modifier
     }
@@ -212,53 +210,42 @@ fun Modifier.liquidGlass(
 }
 
 /**
- * iOS style scroll edge: the content scrolling underneath a bar is blurred and fades out towards the bar's
- * bottom edge, with [tint] laid over it.
+ * Glass bar background: the content scrolling underneath is blurred behind a translucent [tint].
  */
 fun Modifier.liquidGlassEdge(
     backdrop: LiquidGlassBackdrop?,
     tint: Color,
     blurRadius: Dp = LiquidGlassDefaults.BlurRadius,
 ): Modifier {
+    // A translucent bar over blurred content, with a clean edge
     val blur = if (backdrop != null && LiquidGlassDefaults.isBackdropBlurSupported) {
-        BackdropElement(backdrop, blurRadius, Dp.Unspecified, lens = false, fade = true)
+        BackdropElement(backdrop, blurRadius, Dp.Unspecified, lens = false)
     } else {
         Modifier
     }
     val tintAlpha = if (LiquidGlassDefaults.isBackdropBlurSupported) tint.alpha else 1f
     return this
         .then(blur)
-        .drawWithCache {
-            // Full strength down to a short feather at the bottom edge, so everything in the bar sits on glass
-            val feather = edgeFeather(size.height)
-            val brush = Brush.verticalGradient(
-                0f to tint.copy(alpha = tintAlpha),
-                (1f - feather) to tint.copy(alpha = tintAlpha * 0.8f),
-                1f to tint.copy(alpha = if (LiquidGlassDefaults.isBackdropBlurSupported) 0f else tintAlpha),
-            )
-            onDrawBehind { drawRect(brush) }
-        }
+        .background(tint.copy(alpha = tintAlpha))
 }
 
-/** Fraction of a scroll edge's height used to feather it out: about 14dp, at most a third. */
-private fun Density.edgeFeather(height: Float): Float =
-    if (height <= 0f) 0f else (14.dp.toPx() / height).coerceAtMost(0.33f)
+/** Default tint of a top bar's scroll edge: the theme's background, slightly see-through. */
+@Composable
+fun liquidGlassEdgeTint(): Color = MaterialTheme.colorScheme.background.copy(alpha = 0.85f)
 
 private data class BackdropElement(
     val backdrop: LiquidGlassBackdrop,
     val blurRadius: Dp,
     val cornerRadius: Dp,
     val lens: Boolean,
-    val fade: Boolean,
 ) : ModifierNodeElement<BackdropNode>() {
-    override fun create() = BackdropNode(backdrop, blurRadius, cornerRadius, lens, fade)
+    override fun create() = BackdropNode(backdrop, blurRadius, cornerRadius, lens)
 
     override fun update(node: BackdropNode) {
         node.backdrop = backdrop
         node.blurRadius = blurRadius
         node.cornerRadius = cornerRadius
         node.lens = lens
-        node.fade = fade
         node.invalidateEffect()
     }
 }
@@ -272,7 +259,6 @@ private class BackdropNode(
     var blurRadius: Dp,
     var cornerRadius: Dp,
     var lens: Boolean,
-    var fade: Boolean,
 ) : Modifier.Node(), DrawModifierNode, GlobalPositionAwareModifierNode {
 
     private var effectLayer: GraphicsLayer? = null
@@ -321,25 +307,7 @@ private class BackdropNode(
                 drawLayer(backdrop.layer)
             }
         }
-        if (fade) {
-            // Fade the blur out towards the bottom edge
-            drawIntoCanvas { canvas ->
-                canvas.saveLayer(Rect(Offset.Zero, size), Paint())
-                drawLayer(layer)
-                val feather = edgeFeather(size.height)
-                drawRect(
-                    brush = Brush.verticalGradient(
-                        0f to Color.Black,
-                        (1f - feather) to Color.Black,
-                        1f to Color.Transparent,
-                    ),
-                    blendMode = BlendMode.DstIn,
-                )
-                canvas.restore()
-            }
-        } else {
-            drawLayer(layer)
-        }
+        drawLayer(layer)
         drawContent()
     }
 }

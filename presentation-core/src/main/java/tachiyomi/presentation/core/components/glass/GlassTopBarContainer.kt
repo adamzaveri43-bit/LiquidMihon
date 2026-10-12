@@ -32,7 +32,7 @@ fun GlassTopBarContainer(
     Column(
         modifier = modifier.liquidGlassEdge(
             backdrop = LocalLiquidGlassBackdrop.current,
-            tint = MaterialTheme.colorScheme.background.copy(alpha = 0.7f),
+            tint = liquidGlassEdgeTint(),
         ),
     ) {
         CompositionLocalProvider(LocalLiquidGlassEdgeProvided provides true) {
