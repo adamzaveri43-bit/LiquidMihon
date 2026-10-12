@@ -16,7 +16,6 @@ import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
@@ -65,8 +64,10 @@ import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.glass.LiquidGlassDefaults
 import tachiyomi.presentation.core.components.glass.LocalLiquidGlass
 import tachiyomi.presentation.core.components.glass.LocalLiquidGlassBackdrop
+import tachiyomi.presentation.core.components.glass.LocalLiquidGlassEdgeProvided
 import tachiyomi.presentation.core.components.glass.liquidGlass
 import tachiyomi.presentation.core.components.glass.liquidGlassEdge
+import tachiyomi.presentation.core.components.material.Icon
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.clearFocusOnSoftKeyboardHide
 import tachiyomi.presentation.core.util.runOnEnterKeyPressed
@@ -143,11 +144,13 @@ fun AppBar(
     // iOS 26 style: content blurs and fades under the bar, controls sit in floating glass
     val glass = LocalLiquidGlass.current
     val glassEdge = glass && backgroundColor == null
+    // A surrounding container may already draw the edge for the whole top bar stack
+    val drawGlassEdge = glassEdge && !LocalLiquidGlassEdgeProvided.current
     val backdrop = LocalLiquidGlassBackdrop.current
     val glassColors = LiquidGlassDefaults.colors()
     Column(
         modifier = modifier.then(
-            if (glassEdge) {
+            if (drawGlassEdge) {
                 Modifier.liquidGlassEdge(
                     backdrop = backdrop,
                     tint = MaterialTheme.colorScheme.background.copy(alpha = if (isActionMode) 0.9f else 0.7f),

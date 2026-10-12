@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Badge
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteDefaults
@@ -72,6 +71,7 @@ import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.glass.LocalLiquidGlass
 import tachiyomi.presentation.core.components.glass.liquidGlassSource
 import tachiyomi.presentation.core.components.glass.rememberLiquidGlassBackdrop
+import tachiyomi.presentation.core.components.material.Icon
 import tachiyomi.presentation.core.components.material.LocalFloatingBottomBarPadding
 import tachiyomi.presentation.core.i18n.pluralStringResource
 

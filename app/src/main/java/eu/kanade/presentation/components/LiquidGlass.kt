@@ -5,6 +5,8 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -19,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
@@ -34,6 +37,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.semantics.Role
@@ -42,6 +51,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import tachiyomi.presentation.core.components.glass.LiquidGlassBackdrop
 import tachiyomi.presentation.core.components.glass.LiquidGlassDefaults
+import tachiyomi.presentation.core.components.glass.LocalGlassAero
 import tachiyomi.presentation.core.components.glass.liquidGlass
 
 object LiquidGlassNavigationBarDefaults {
@@ -159,7 +169,11 @@ fun RowScope.LiquidGlassNavigationBarItem(
     ) {
         CompositionLocalProvider(LocalContentColor provides contentColor) {
             BadgedBox(badge = { badge?.invoke() }) {
-                icon()
+                if (selected && LocalGlassAero.current) {
+                    AeroOrb { icon() }
+                } else {
+                    icon()
+                }
             }
             Spacer(modifier = Modifier.height(2.dp))
             Text(
@@ -169,6 +183,50 @@ fun RowScope.LiquidGlassNavigationBarItem(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+        }
+    }
+}
+
+/**
+ * Glossy Frutiger Aero bubble behind the selected tab's icon.
+ */
+@Composable
+private fun AeroOrb(content: @Composable () -> Unit) {
+    val base = MaterialTheme.colorScheme.primary
+    Box(
+        modifier = Modifier
+            .size(34.dp)
+            .shadow(elevation = 4.dp, shape = CircleShape, ambientColor = base, spotColor = base)
+            .clip(CircleShape)
+            .background(
+                Brush.verticalGradient(
+                    0f to lerp(base, Color.White, 0.45f),
+                    0.55f to base,
+                    1f to lerp(base, Color.Black, 0.25f),
+                ),
+            )
+            .drawWithContent {
+                drawContent()
+                // Specular cap over the top half
+                drawOval(
+                    brush = Brush.verticalGradient(
+                        0f to Color.White.copy(alpha = 0.85f),
+                        1f to Color.White.copy(alpha = 0.1f),
+                        startY = 0f,
+                        endY = size.height * 0.5f,
+                    ),
+                    topLeft = Offset(size.width * 0.14f, size.height * 0.04f),
+                    size = Size(size.width * 0.72f, size.height * 0.46f),
+                )
+            }
+            .border(1.dp, Color.White.copy(alpha = 0.7f), CircleShape),
+        contentAlignment = Alignment.Center,
+    ) {
+        // A plain white glyph reads best on the orb
+        CompositionLocalProvider(LocalGlassAero provides false, LocalContentColor provides Color.White) {
+            Box(modifier = Modifier.size(20.dp), contentAlignment = Alignment.Center) {
+                content()
+            }
         }
     }
 }

@@ -5,7 +5,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.border
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -29,7 +29,6 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -49,6 +48,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
@@ -68,8 +68,10 @@ import tachiyomi.presentation.core.components.BadgeGroup
 import tachiyomi.presentation.core.components.glass.LiquidGlassDefaults
 import tachiyomi.presentation.core.components.glass.LocalLiquidGlass
 import tachiyomi.presentation.core.components.glass.liquidGlass
+import tachiyomi.presentation.core.components.material.Icon
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource
+import kotlin.math.abs
 import kotlin.math.absoluteValue
 import kotlin.math.sign
 import tachiyomi.domain.manga.model.MangaCover as MangaCoverModel
@@ -157,22 +159,45 @@ internal fun LibraryCoverFlow(
                         pagerSnapDistance = PagerSnapDistance.atMost(12),
                     ),
                     key = { items[it].libraryManga.id },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        // Taps are resolved by where they land in the row rather than by which cover is
+                        // under the finger: neighbours are drawn over the edges of the focused cover
+                        .pointerInput(items, coverWidth) {
+                            val centerZone = coverWidth.toPx() * 0.6f
+                            fun zone(x: Float): Int {
+                                val dx = x - size.width / 2f
+                                return when {
+                                    abs(dx) <= centerZone -> 0
+                                    dx < 0 -> -1
+                                    else -> 1
+                                }
+                            }
+                            detectTapGestures(
+                                onTap = { position ->
+                                    // A tap while flinging just stops it
+                                    if (pagerState.isScrollInProgress) return@detectTapGestures
+                                    val page = pagerState.currentPage
+                                    when (val z = zone(position.x)) {
+                                        0 -> items.getOrNull(page)?.let { onClick(it.libraryManga) }
+                                        else -> scope.launch {
+                                            pagerState.animateScrollToPage((page + z).coerceIn(0, items.lastIndex))
+                                        }
+                                    }
+                                },
+                                onLongPress = { position ->
+                                    if (zone(position.x) == 0) {
+                                        items.getOrNull(pagerState.currentPage)?.let { onLongClick(it.libraryManga) }
+                                    }
+                                },
+                            )
+                        },
                 ) { page ->
                     val item = items[page]
-                    val manga = item.libraryManga
                     CoverFlowItem(
                         item = item,
-                        isSelected = manga.id in selection,
+                        isSelected = item.libraryManga.id in selection,
                         pageOffset = { (page - pagerState.currentPage) - pagerState.currentPageOffsetFraction },
-                        onClick = {
-                            if (page == pagerState.currentPage) {
-                                onClick(manga)
-                            } else {
-                                scope.launch { pagerState.animateScrollToPage(page) }
-                            }
-                        },
-                        onLongClick = { onLongClick(manga) },
                     )
                 }
 
@@ -204,8 +229,6 @@ private fun CoverFlowItem(
     item: LibraryItem,
     isSelected: Boolean,
     pageOffset: () -> Float,
-    onClick: () -> Unit,
-    onLongClick: () -> Unit,
 ) {
     val shape = MaterialTheme.shapes.medium
     val coverData = item.coverData()
@@ -237,8 +260,7 @@ private fun CoverFlowItem(
                     } else {
                         Modifier
                     },
-                )
-                .combinedClickable(onClick = onClick, onLongClick = onLongClick),
+                ),
         )
 
         // Mirror reflection fading into the floor. The fade is applied to the whole unflipped box so it

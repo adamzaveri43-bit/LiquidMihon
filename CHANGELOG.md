@@ -28,6 +28,9 @@ The format is a modified version of [Keep a Changelog](https://keepachangelog.co
 - Add book opening animation when resuming: the cover swings open into the reader
 - Add dimming control for image backgrounds
 - Glass resume button, manga action row and menus
+- Frutiger Aero icons: every icon becomes a glossy Aero gradient glyph, with an Aero orb behind the selected tab
+- Fix Cover flow taps opening the neighbouring manga
+- Fix the browse and global search top bars turning solid below the toolbar with the glass styles
 
 ## [v0.21.1] - 2026-10-12
 ### Fixed
