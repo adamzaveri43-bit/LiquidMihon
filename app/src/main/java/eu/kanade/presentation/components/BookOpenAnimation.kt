@@ -165,10 +165,10 @@ private fun BookOpenOverlay(
                 .align(Alignment.Center)
                 .width(coverWidth)
                 .graphicsLayer {
-                    // Scale with the page so the hinge stays on the page's edge
+                    // Scale evenly with the page's width so the hinge stays on its edge without stretching the cover
                     val scale = grow * (pageWidth / coverWidth)
                     scaleX = scale
-                    scaleY = grow * (pageHeight / coverHeight)
+                    scaleY = scale
                 },
         ) {
             MangaCover.Book(

@@ -14,6 +14,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.referentialEqualityPolicy
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -46,6 +47,7 @@ import androidx.compose.ui.node.GlobalPositionAwareModifierNode
 import androidx.compose.ui.node.ModifierNodeElement
 import androidx.compose.ui.node.invalidateDraw
 import androidx.compose.ui.node.requireGraphicsContext
+import androidx.compose.ui.node.requireLayoutCoordinates
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -74,7 +76,8 @@ val LocalLiquidGlassBackdrop = staticCompositionLocalOf<LiquidGlassBackdrop?> { 
  */
 @Stable
 class LiquidGlassBackdrop internal constructor(internal val layer: GraphicsLayer) {
-    internal var positionInRoot by mutableStateOf(Offset.Zero)
+    // Glass reads this while drawing, so it redraws as soon as the source has been laid out
+    internal var coordinates by mutableStateOf<LayoutCoordinates?>(null, referentialEqualityPolicy())
 }
 
 @Composable
@@ -84,7 +87,7 @@ fun rememberLiquidGlassBackdrop(): LiquidGlassBackdrop {
 }
 
 fun Modifier.liquidGlassSource(backdrop: LiquidGlassBackdrop): Modifier = this
-    .onGloballyPositioned { backdrop.positionInRoot = it.positionInRoot() }
+    .onGloballyPositioned { backdrop.coordinates = it }
     .drawWithContent {
         backdrop.layer.record { this@drawWithContent.drawContent() }
         drawLayer(backdrop.layer)
@@ -263,7 +266,7 @@ private class BackdropNode(
 
     private var effectLayer: GraphicsLayer? = null
     private var effectKey: Any? = null
-    private var positionInRoot = Offset.Zero
+    private var lastPosition = Offset.Zero
 
     fun invalidateEffect() {
         effectKey = null
@@ -282,26 +285,30 @@ private class BackdropNode(
 
     override fun onGloballyPositioned(coordinates: LayoutCoordinates) {
         val position = coordinates.positionInRoot()
-        if (position != positionInRoot) {
-            positionInRoot = position
+        if (position != lastPosition) {
+            lastPosition = position
             invalidateDraw()
         }
     }
 
     override fun ContentDrawScope.draw() {
         val layer = effectLayer
-        if (layer == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+        val source = backdrop.coordinates?.takeIf { it.isAttached }
+        val self = requireLayoutCoordinates().takeIf { it.isAttached }
+        // Until both are laid out there's nothing correct to show yet: just the tint, never the wrong content
+        if (layer == null || source == null || self == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
             drawContent()
             return
         }
         val radius = blurRadius.toPx()
         val corner = if (cornerRadius == Dp.Unspecified) size.minDimension / 2 else cornerRadius.toPx()
-        val key = listOf(radius, corner, size, lens)
+        val key = GlassEffectKey(radius, corner, size, lens)
         if (key != effectKey) {
-            layer.renderEffect = createGlassRenderEffect(radius, if (lens) size else null, corner, density)
+            layer.renderEffect = GlassEffectCache.get(key, density)
             effectKey = key
         }
-        val offset = backdrop.positionInRoot - positionInRoot
+        // Resolved at draw time so it's right on the very first frame and during transitions
+        val offset = self.localPositionOf(source, Offset.Zero)
         layer.record {
             translate(offset.x, offset.y) {
                 drawLayer(backdrop.layer)
@@ -309,6 +316,25 @@ private class BackdropNode(
         }
         drawLayer(layer)
         drawContent()
+    }
+}
+
+private data class GlassEffectKey(val radius: Float, val corner: Float, val size: Size, val lens: Boolean)
+
+/**
+ * Effects are shared between glass surfaces of the same size, so a new screen doesn't have to build (and compile
+ * the lens shader for) its bars again.
+ */
+private object GlassEffectCache {
+    private val effects = object : LinkedHashMap<GlassEffectKey, RenderEffect>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<GlassEffectKey, RenderEffect>) = size > 32
+    }
+
+    fun get(key: GlassEffectKey, density: Float): RenderEffect = synchronized(effects) {
+        effects.getOrPut(key) {
+            @Suppress("NewApi") // Only reached on API 31+
+            createGlassRenderEffect(key.radius, if (key.lens) key.size else null, key.corner, density)
+        }
     }
 }
 
