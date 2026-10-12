@@ -30,10 +30,8 @@ fun GlassTopBarContainer(
         return
     }
     Column(
-        modifier = modifier.liquidGlassEdge(
-            backdrop = LocalLiquidGlassBackdrop.current,
-            tint = liquidGlassEdgeTint(),
-        ),
+        // Solid bar: only the buttons on it are glass
+        modifier = modifier.background(MaterialTheme.colorScheme.background),
     ) {
         CompositionLocalProvider(LocalLiquidGlassEdgeProvided provides true) {
             content()

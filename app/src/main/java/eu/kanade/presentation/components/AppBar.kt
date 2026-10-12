@@ -1,5 +1,6 @@
 package eu.kanade.presentation.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
@@ -63,11 +64,8 @@ import mihon.icons.materialsymbols.rounded.Search
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.glass.LiquidGlassDefaults
 import tachiyomi.presentation.core.components.glass.LocalLiquidGlass
-import tachiyomi.presentation.core.components.glass.LocalLiquidGlassBackdrop
 import tachiyomi.presentation.core.components.glass.LocalLiquidGlassEdgeProvided
 import tachiyomi.presentation.core.components.glass.liquidGlass
-import tachiyomi.presentation.core.components.glass.liquidGlassEdge
-import tachiyomi.presentation.core.components.glass.liquidGlassEdgeTint
 import tachiyomi.presentation.core.components.material.Icon
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.clearFocusOnSoftKeyboardHide
@@ -147,8 +145,8 @@ fun AppBar(
     val glassEdge = glass && backgroundColor == null
     // A surrounding container may already draw the edge for the whole top bar stack
     val drawGlassEdge = glassEdge && !LocalLiquidGlassEdgeProvided.current
-    val backdrop = LocalLiquidGlassBackdrop.current
-    // Buttons sit on the bar's tint, so give them a lighter fill and a clear rim to stand out
+    // Plain glass buttons (no backdrop, so nothing scrolling underneath shows in them) with a light fill
+    // and a clear rim to stand out on the bar
     val glassColors = LiquidGlassDefaults.colors().let { base ->
         base.copy(
             tint = if (base.gloss) {
@@ -162,14 +160,8 @@ fun AppBar(
     Column(
         modifier = modifier.then(
             if (drawGlassEdge) {
-                Modifier.liquidGlassEdge(
-                    backdrop = backdrop,
-                    tint = if (isActionMode) {
-                        MaterialTheme.colorScheme.background.copy(alpha = 0.92f)
-                    } else {
-                        liquidGlassEdgeTint()
-                    },
-                )
+                // Solid bar: only the buttons on it are glass
+                Modifier.background(MaterialTheme.colorScheme.background)
             } else {
                 Modifier
             },
@@ -200,7 +192,7 @@ fun AppBar(
                         Box(
                             modifier = Modifier
                                 .padding(start = 4.dp)
-                                .liquidGlass(shape = CircleShape, colors = glassColors, backdrop = backdrop),
+                                .liquidGlass(shape = CircleShape, colors = glassColors),
                         ) {
                             navigationButton()
                         }
@@ -215,7 +207,7 @@ fun AppBar(
                     Row(
                         modifier = Modifier
                             .padding(end = 4.dp)
-                            .liquidGlass(shape = CircleShape, colors = glassColors, backdrop = backdrop),
+                            .liquidGlass(shape = CircleShape, colors = glassColors),
                         content = actions,
                     )
                 } else {
