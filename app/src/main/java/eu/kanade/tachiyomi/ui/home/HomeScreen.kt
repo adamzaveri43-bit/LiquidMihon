@@ -2,8 +2,20 @@ package eu.kanade.tachiyomi.ui.home
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Badge
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -18,8 +30,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
@@ -27,10 +43,17 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastForEach
+import androidx.compose.ui.util.fastForEachIndexed
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
 import cafe.adriel.voyager.navigator.tab.TabNavigator
+import eu.kanade.presentation.components.LiquidGlassNavigationBar
+import eu.kanade.presentation.components.LiquidGlassNavigationBarDefaults
+import eu.kanade.presentation.components.LiquidGlassNavigationBarItem
+import eu.kanade.presentation.components.liquidGlassSource
+import eu.kanade.presentation.components.rememberLiquidGlassBackdrop
+import eu.kanade.presentation.theme.LocalLiquidGlass
 import eu.kanade.presentation.util.Screen
 import eu.kanade.presentation.util.isTabletUi
 import eu.kanade.tachiyomi.ui.browse.BrowseTab
@@ -49,6 +72,7 @@ import mihon.app.di.appGraph
 import soup.compose.material.motion.animation.materialFadeThroughIn
 import soup.compose.material.motion.animation.materialFadeThroughOut
 import tachiyomi.i18n.MR
+import tachiyomi.presentation.core.components.material.LocalFloatingBottomBarPadding
 import tachiyomi.presentation.core.i18n.pluralStringResource
 
 object HomeScreen : Screen() {
@@ -86,10 +110,13 @@ object HomeScreen : Screen() {
                 } else {
                     NavigationSuiteType.NavigationBar
                 }
+                val useLiquidGlassBar = LocalLiquidGlass.current && !tabletUi
                 val navigationSuiteState = rememberNavigationSuiteScaffoldState()
+                var showLiquidGlassBar by rememberSaveable { mutableStateOf(true) }
                 LaunchedEffect(navigationSuiteState, tabletUi) {
                     if (tabletUi) navigationSuiteState.show()
                     showBottomNavEvent.receiveAsFlow().collectLatest { show ->
+                        showLiquidGlassBar = tabletUi || show
                         if (tabletUi || show) {
                             navigationSuiteState.show()
                         } else {
@@ -98,31 +125,25 @@ object HomeScreen : Screen() {
                     }
                 }
 
-                NavigationSuiteScaffold(
-                    navigationSuiteType = navigationSuiteType,
-                    state = navigationSuiteState,
-                    navigationSuiteColors = NavigationSuiteDefaults.colors(
-                        navigationRailContainerColor = MaterialTheme.colorScheme
-                            .surfaceColorAtElevation(3.dp),
-                    ),
-                    navigationItemVerticalArrangement = Arrangement.Center,
-                    navigationItems = {
-                        TABS.fastForEach { NavigationSuiteItem(it, navigationSuiteType) }
-                    },
-                ) {
-                    AnimatedContent(
-                        targetState = tabNavigator.current,
-                        transitionSpec = {
-                            materialFadeThroughIn(
-                                initialScale = 1f,
-                                durationMillis = TabFadeDuration,
-                            ) togetherWith materialFadeThroughOut(durationMillis = TabFadeDuration)
+                if (useLiquidGlassBar) {
+                    LiquidGlassHome(
+                        tabNavigator = tabNavigator,
+                        showNavigationBar = showLiquidGlassBar,
+                    )
+                } else {
+                    NavigationSuiteScaffold(
+                        navigationSuiteType = navigationSuiteType,
+                        state = navigationSuiteState,
+                        navigationSuiteColors = NavigationSuiteDefaults.colors(
+                            navigationRailContainerColor = MaterialTheme.colorScheme
+                                .surfaceColorAtElevation(3.dp),
+                        ),
+                        navigationItemVerticalArrangement = Arrangement.Center,
+                        navigationItems = {
+                            TABS.fastForEach { NavigationSuiteItem(it, navigationSuiteType) }
                         },
-                        label = "tabContent",
                     ) {
-                        tabNavigator.saveableState(key = "currentTab", it) {
-                            it.Content()
-                        }
+                        TabContent(tabNavigator)
                     }
                 }
             }
@@ -159,6 +180,97 @@ object HomeScreen : Screen() {
                         if (it is Tab.More && it.toDownloads) {
                             navigator.push(DownloadQueueScreen)
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun TabContent(tabNavigator: TabNavigator) {
+        AnimatedContent(
+            targetState = tabNavigator.current,
+            transitionSpec = {
+                materialFadeThroughIn(
+                    initialScale = 1f,
+                    durationMillis = TabFadeDuration,
+                ) togetherWith materialFadeThroughOut(durationMillis = TabFadeDuration)
+            },
+            label = "tabContent",
+        ) {
+            tabNavigator.saveableState(key = "currentTab", it) {
+                it.Content()
+            }
+        }
+    }
+
+    /**
+     * Tab content running edge to edge with a floating liquid glass navigation bar on top of it.
+     */
+    @Composable
+    private fun LiquidGlassHome(
+        tabNavigator: TabNavigator,
+        showNavigationBar: Boolean,
+    ) {
+        val navigator = LocalNavigator.currentOrThrow
+        val scope = rememberCoroutineScope()
+        val backdrop = rememberLiquidGlassBackdrop()
+        val floatingBarPadding by animateDpAsState(
+            targetValue = if (showNavigationBar) LiquidGlassNavigationBarDefaults.FloatingHeight else 0.dp,
+            label = "floatingBarPadding",
+        )
+        Box(modifier = Modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .liquidGlassSource(backdrop),
+            ) {
+                CompositionLocalProvider(LocalFloatingBottomBarPadding provides floatingBarPadding) {
+                    TabContent(tabNavigator)
+                }
+            }
+
+            AnimatedVisibility(
+                visible = showNavigationBar,
+                modifier = Modifier.align(Alignment.BottomCenter),
+                enter = slideInVertically { it } + fadeIn(),
+                exit = slideOutVertically { it } + fadeOut(),
+            ) {
+                val selectedIndex = TABS.indexOfFirst { tabNavigator.current::class == it::class }
+                LiquidGlassNavigationBar(
+                    backdrop = backdrop,
+                    selectedIndex = selectedIndex.coerceAtLeast(0),
+                    itemCount = TABS.size,
+                    modifier = Modifier
+                        .navigationBarsPadding()
+                        .padding(
+                            start = LiquidGlassNavigationBarDefaults.HorizontalMargin,
+                            end = LiquidGlassNavigationBarDefaults.HorizontalMargin,
+                            bottom = LiquidGlassNavigationBarDefaults.BottomMargin,
+                        )
+                        .widthIn(max = LiquidGlassNavigationBarDefaults.MaxWidth)
+                        .fillMaxWidth(),
+                ) {
+                    TABS.fastForEachIndexed { index, tab ->
+                        val selected = index == selectedIndex
+                        LiquidGlassNavigationBarItem(
+                            selected = selected,
+                            onClick = {
+                                if (!selected) {
+                                    tabNavigator.current = tab
+                                } else {
+                                    scope.launch { tab.onReselect(navigator) }
+                                }
+                            },
+                            icon = {
+                                Icon(
+                                    painter = tab.options.icon!!,
+                                    contentDescription = null,
+                                )
+                            },
+                            label = tab.options.title,
+                            badge = tabBadge(tab),
+                        )
                     }
                 }
             }

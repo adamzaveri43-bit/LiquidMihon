@@ -6,6 +6,7 @@ import tachiyomi.i18n.MR
 enum class AppTheme(val titleRes: StringResource?) {
     DEFAULT(MR.strings.label_default),
     MONET(MR.strings.theme_monet),
+    LIQUID_GLASS(MR.strings.theme_liquidglass),
     CATPPUCCIN(MR.strings.theme_catppuccin),
     GREEN_APPLE(MR.strings.theme_greenapple),
     LAVENDER(MR.strings.theme_lavender),

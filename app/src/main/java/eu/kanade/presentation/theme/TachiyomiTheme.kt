@@ -2,16 +2,22 @@ package eu.kanade.presentation.theme
 
 import android.content.Context
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialExpressiveTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import eu.kanade.domain.ui.model.AppTheme
 import eu.kanade.presentation.theme.colorscheme.BaseColorScheme
 import eu.kanade.presentation.theme.colorscheme.CatppuccinColorScheme
 import eu.kanade.presentation.theme.colorscheme.GreenAppleColorScheme
 import eu.kanade.presentation.theme.colorscheme.LavenderColorScheme
+import eu.kanade.presentation.theme.colorscheme.LiquidGlassColorScheme
 import eu.kanade.presentation.theme.colorscheme.MidnightDuskColorScheme
 import eu.kanade.presentation.theme.colorscheme.MonetColorScheme
 import eu.kanade.presentation.theme.colorscheme.MonochromeColorScheme
@@ -56,6 +62,7 @@ private fun BaseTachiyomiTheme(
 ) {
     val context = LocalContext.current
     val isDark = isSystemInDarkTheme()
+    val isLiquidGlass = appTheme == AppTheme.LIQUID_GLASS
     MaterialExpressiveTheme(
         colorScheme = remember(appTheme, isDark, isAmoled) {
             getThemeColorScheme(
@@ -65,9 +72,28 @@ private fun BaseTachiyomiTheme(
                 isAmoled = isAmoled,
             )
         },
-        content = content,
-    )
+        shapes = if (isLiquidGlass) LiquidGlassShapes else DefaultShapes,
+    ) {
+        CompositionLocalProvider(LocalLiquidGlass provides isLiquidGlass, content = content)
+    }
 }
+
+/**
+ * Whether the Liquid Glass theme is active, i.e. chrome such as the bottom navigation should be drawn as
+ * floating translucent glass instead of opaque Material surfaces.
+ */
+val LocalLiquidGlass = staticCompositionLocalOf { false }
+
+private val DefaultShapes = Shapes()
+
+// Softer, rounder corners to match the glass look
+private val LiquidGlassShapes = Shapes(
+    extraSmall = RoundedCornerShape(10.dp),
+    small = RoundedCornerShape(14.dp),
+    medium = RoundedCornerShape(20.dp),
+    large = RoundedCornerShape(28.dp),
+    extraLarge = RoundedCornerShape(36.dp),
+)
 
 private fun getThemeColorScheme(
     context: Context,
@@ -93,6 +119,7 @@ private val colorSchemes: Map<AppTheme, BaseColorScheme> = mapOf(
     AppTheme.TOKYONIGHT to TokyoNightColorScheme,
     AppTheme.GREEN_APPLE to GreenAppleColorScheme,
     AppTheme.LAVENDER to LavenderColorScheme,
+    AppTheme.LIQUID_GLASS to LiquidGlassColorScheme,
     AppTheme.MIDNIGHT_DUSK to MidnightDuskColorScheme,
     AppTheme.MONOCHROME to MonochromeColorScheme,
     AppTheme.NORD to NordColorScheme,
