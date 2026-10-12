@@ -19,6 +19,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
@@ -46,6 +47,7 @@ import androidx.compose.ui.node.GlobalPositionAwareModifierNode
 import androidx.compose.ui.node.ModifierNodeElement
 import androidx.compose.ui.node.invalidateDraw
 import androidx.compose.ui.node.requireGraphicsContext
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
@@ -226,14 +228,21 @@ fun Modifier.liquidGlassEdge(
     val tintAlpha = if (LiquidGlassDefaults.isBackdropBlurSupported) tint.alpha else 1f
     return this
         .then(blur)
-        .background(
-            Brush.verticalGradient(
+        .drawWithCache {
+            // Full strength down to a short feather at the bottom edge, so everything in the bar sits on glass
+            val feather = edgeFeather(size.height)
+            val brush = Brush.verticalGradient(
                 0f to tint.copy(alpha = tintAlpha),
-                0.7f to tint.copy(alpha = tintAlpha * 0.75f),
-                1f to tint.copy(alpha = tintAlpha * if (LiquidGlassDefaults.isBackdropBlurSupported) 0f else 1f),
-            ),
-        )
+                (1f - feather) to tint.copy(alpha = tintAlpha * 0.8f),
+                1f to tint.copy(alpha = if (LiquidGlassDefaults.isBackdropBlurSupported) 0f else tintAlpha),
+            )
+            onDrawBehind { drawRect(brush) }
+        }
 }
+
+/** Fraction of a scroll edge's height used to feather it out: about 14dp, at most a third. */
+private fun Density.edgeFeather(height: Float): Float =
+    if (height <= 0f) 0f else (14.dp.toPx() / height).coerceAtMost(0.33f)
 
 private data class BackdropElement(
     val backdrop: LiquidGlassBackdrop,
@@ -317,8 +326,13 @@ private class BackdropNode(
             drawIntoCanvas { canvas ->
                 canvas.saveLayer(Rect(Offset.Zero, size), Paint())
                 drawLayer(layer)
+                val feather = edgeFeather(size.height)
                 drawRect(
-                    brush = Brush.verticalGradient(0f to Color.Black, 0.6f to Color.Black, 1f to Color.Transparent),
+                    brush = Brush.verticalGradient(
+                        0f to Color.Black,
+                        (1f - feather) to Color.Black,
+                        1f to Color.Transparent,
+                    ),
                     blendMode = BlendMode.DstIn,
                 )
                 canvas.restore()

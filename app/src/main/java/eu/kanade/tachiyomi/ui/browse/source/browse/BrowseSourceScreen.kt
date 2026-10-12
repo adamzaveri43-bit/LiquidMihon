@@ -59,6 +59,7 @@ import tachiyomi.domain.source.model.StubSource
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.glass.GlassSnackbarHost
 import tachiyomi.presentation.core.components.glass.GlassTopBarContainer
+import tachiyomi.presentation.core.components.glass.LocalLiquidGlass
 import tachiyomi.presentation.core.components.material.Icon
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.components.material.padding
@@ -207,7 +208,8 @@ data class BrowseSourceScreen(
                         }
                     }
 
-                    HorizontalDivider()
+                    // The glass edge already separates the bar from the content
+                    if (!LocalLiquidGlass.current) HorizontalDivider()
                 }
             },
             snackbarHost = { GlassSnackbarHost(hostState = snackbarHostState) },
