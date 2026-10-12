@@ -279,6 +279,7 @@ fun SearchToolbar(
     actions: @Composable RowScope.() -> Unit = {},
     scrollBehavior: TopAppBarScrollBehavior? = null,
     interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
+    backgroundColor: Color? = null,
 ) {
     val focusRequester = remember { FocusRequester() }
     val searchFieldState = rememberTextFieldState(searchQuery.orEmpty())
@@ -301,6 +302,7 @@ fun SearchToolbar(
 
     AppBar(
         modifier = modifier,
+        backgroundColor = backgroundColor,
         titleContent = {
             if (searchQuery == null) return@AppBar titleContent()
 

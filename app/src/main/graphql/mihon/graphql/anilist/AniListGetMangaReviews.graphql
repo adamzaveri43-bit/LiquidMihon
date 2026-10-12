@@ -1,0 +1,53 @@
+query AniListGetMangaReviews(
+  $id: Int,
+  $search: String,
+) {
+  Media(
+    id: $id,
+    search: $search,
+    type: MANGA,
+    format_not_in: [NOVEL],
+  ) {
+    id
+    siteUrl
+    title {
+      userPreferred
+    }
+    description(asHtml: false)
+    averageScore
+    meanScore
+    popularity
+    favourites
+    genres
+    rankings {
+      rank
+      type
+      allTime
+      context
+    }
+    tags {
+      name
+      description
+      rank
+      isMediaSpoiler
+    }
+    reviews(sort: [RATING_DESC], perPage: 25) {
+      nodes {
+        id
+        summary
+        body(asHtml: false)
+        score
+        rating
+        ratingAmount
+        siteUrl
+        createdAt
+        user {
+          name
+          avatar {
+            medium
+          }
+        }
+      }
+    }
+  }
+}

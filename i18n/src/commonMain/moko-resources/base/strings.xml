@@ -109,6 +109,7 @@
     <string name="action_start">Start</string>
     <string name="action_resume">Resume</string>
     <string name="action_open_in_browser">Open in browser</string>
+    <string name="action_reviews">Reviews</string>
     <string name="action_show_manga">Show entry</string>
     <string name="action_copy_to_clipboard">Copy to clipboard</string>
     <string name="action_copy_link">Copy link</string>
@@ -122,6 +123,17 @@
     <string name="action_display_comfortable_grid">Comfortable grid</string>
     <string name="action_display_list">List</string>
     <string name="action_display_cover_only_grid">Cover-only grid</string>
+    <string name="action_display_cover_flow">Cover flow</string>
+    <string name="library_background">Background</string>
+    <string name="library_background_none">None</string>
+    <string name="library_background_aurora">Aurora</string>
+    <string name="library_background_sunset">Sunset</string>
+    <string name="library_background_ocean">Ocean</string>
+    <string name="library_background_forest">Forest</string>
+    <string name="library_background_nebula">Nebula</string>
+    <string name="library_background_custom">Your image</string>
+    <string name="library_background_change_image">Change image</string>
+    <string name="library_animations">Animations</string>
     <string name="action_display_download_badge">Downloaded chapters</string>
     <string name="action_display_unread_badge">Unread chapters</string>
     <string name="action_display_local_badge">Local source</string>
@@ -781,6 +793,22 @@
     <string name="manga_removed_library">Removed from library</string>
     <string name="manga_info_expand">More</string>
     <string name="manga_info_collapse">Less</string>
+
+    <!-- Reviews -->
+    <string name="reviews_error">Couldn\'t load reviews</string>
+    <string name="reviews_not_found">This title couldn\'t be found on AniList. Link it with the AniList tracker to get exact results.</string>
+    <string name="reviews_none">No one has reviewed this title on AniList yet</string>
+    <string name="reviews_community">Community reviews</string>
+    <string name="reviews_synopsis">Synopsis</string>
+    <string name="reviews_themes">Themes</string>
+    <string name="reviews_average_score">Average score</string>
+    <string name="reviews_members">Members</string>
+    <string name="reviews_favourites">Favorites</string>
+    <string name="reviews_show_spoilers">Show spoilers</string>
+    <string name="reviews_hide_spoilers">Hide spoilers</string>
+    <string name="reviews_helpful">%1$d of %2$d found this helpful</string>
+    <string name="reviews_source_tracker">Data from AniList, using your linked AniList entry</string>
+    <string name="reviews_source_search">Data from AniList, matched by title. Link the title with the AniList tracker if this isn\'t the right series.</string>
     <string name="delete_downloads_for_manga">Delete downloaded chapters?</string>
     <string name="copied_to_clipboard_plain">Copied to clipboard</string>
     <string name="copied_to_clipboard">Copied to clipboard:\n%1$s</string>

@@ -13,6 +13,10 @@ The format is a modified version of [Keep a Changelog](https://keepachangelog.co
 ## [Unreleased]
 ### Added
 - Add Liquid Glass theme, now the default, with a floating translucent navigation bar that blurs the content scrolling behind it on Android 12+
+- Add library backgrounds: animated gradient presets or your own image (Library → Filter → Display)
+- Add Cover flow library display mode
+- Add library animations: items spring in as they appear and animate when reordered
+- Add Reviews screen to manga (⋮ → Reviews) with AniList community reviews, score, rankings and themes
 - Add experimental high quality reader renderer (Settings → Advanced → Use high quality renderer) with better image scaling, page transition animations, dual page view and display cutout handling ([@wwww-wwww](https://github.com/wwww-wwww)) ([#3388](https://github.com/mihonapp/mihon/pull/3388))
   - Match background and transition page colors to the old reader ([@AntsyLich](https://github.com/AntsyLich)) ([#3765](https://github.com/mihonapp/mihon/pull/3765))
   - Support the Fit width, Fit height and Original size scale types and the zoom start position ([@wwww-wwww](https://github.com/wwww-wwww)) ([#3801](https://github.com/mihonapp/mihon/pull/3801))

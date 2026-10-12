@@ -1,0 +1,326 @@
+package eu.kanade.presentation.library.components
+
+import android.os.Build
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.border
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PageSize
+import androidx.compose.foundation.pager.PagerDefaults
+import androidx.compose.foundation.pager.PagerSnapDistance
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.min
+import eu.kanade.presentation.manga.components.MangaCover
+import eu.kanade.tachiyomi.ui.library.LibraryItem
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.launch
+import mihon.icons.materialsymbols.MaterialSymbols
+import mihon.icons.materialsymbols.roundedfilled.PlayArrow
+import tachiyomi.domain.library.model.LibraryManga
+import tachiyomi.i18n.MR
+import tachiyomi.presentation.core.components.BadgeGroup
+import tachiyomi.presentation.core.components.material.padding
+import tachiyomi.presentation.core.i18n.stringResource
+import kotlin.math.absoluteValue
+import kotlin.math.sign
+import tachiyomi.domain.manga.model.MangaCover as MangaCoverModel
+
+/**
+ * Cover Flow: one cover front and center, its neighbours tilted away in 3D on either side.
+ */
+@Composable
+internal fun LibraryCoverFlow(
+    items: List<LibraryItem>,
+    contentPadding: PaddingValues,
+    selection: Set<Long>,
+    onClick: (LibraryManga) -> Unit,
+    onLongClick: (LibraryManga) -> Unit,
+    onClickContinueReading: ((LibraryManga) -> Unit)?,
+    searchQuery: String?,
+    onGlobalSearchClicked: () -> Unit,
+) {
+    val pagerState = rememberPagerState { items.size }
+    val scope = rememberCoroutineScope()
+    val haptic = LocalHapticFeedback.current
+
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.currentPage }
+            .drop(1)
+            .collect { haptic.performHapticFeedback(HapticFeedbackType.SegmentTick) }
+    }
+
+    val current = items.getOrNull(pagerState.currentPage.coerceIn(0, (items.size - 1).coerceAtLeast(0)))
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        // Ambient glow of the focused cover
+        if (current != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            Crossfade(
+                targetState = current.libraryManga.manga.id,
+                label = "coverFlowGlow",
+                modifier = Modifier.fillMaxSize(),
+            ) { mangaId ->
+                val item = items.firstOrNull { it.libraryManga.manga.id == mangaId } ?: return@Crossfade
+                MangaCover.Book(
+                    data = item.coverData(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer { alpha = 0.35f }
+                        .blur(72.dp),
+                )
+            }
+        }
+
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(contentPadding),
+        ) {
+            val coverWidth = min(maxWidth * 0.56f, (maxHeight - 200.dp) / 1.8f).coerceAtLeast(96.dp)
+            val sidePadding = (maxWidth - coverWidth) / 2
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                if (!searchQuery.isNullOrEmpty()) {
+                    GlobalSearchItem(
+                        searchQuery = searchQuery,
+                        onClick = onGlobalSearchClicked,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(MaterialTheme.padding.small),
+                    )
+                }
+
+                Spacer(modifier = Modifier.weight(1f))
+
+                HorizontalPager(
+                    state = pagerState,
+                    pageSize = PageSize.Fixed(coverWidth),
+                    contentPadding = PaddingValues(horizontal = sidePadding),
+                    beyondViewportPageCount = 3,
+                    flingBehavior = PagerDefaults.flingBehavior(
+                        state = pagerState,
+                        pagerSnapDistance = PagerSnapDistance.atMost(12),
+                    ),
+                    key = { items[it].libraryManga.id },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { page ->
+                    val item = items[page]
+                    val manga = item.libraryManga
+                    CoverFlowItem(
+                        item = item,
+                        isSelected = manga.id in selection,
+                        pageOffset = { (page - pagerState.currentPage) - pagerState.currentPageOffsetFraction },
+                        onClick = {
+                            if (page == pagerState.currentPage) {
+                                onClick(manga)
+                            } else {
+                                scope.launch { pagerState.animateScrollToPage(page) }
+                            }
+                        },
+                        onLongClick = { onLongClick(manga) },
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(MaterialTheme.padding.medium))
+
+                AnimatedContent(
+                    targetState = current,
+                    transitionSpec = { fadeIn() togetherWith fadeOut() },
+                    contentKey = { it?.libraryManga?.id },
+                    label = "coverFlowDetails",
+                ) { item ->
+                    if (item == null) return@AnimatedContent
+                    CoverFlowDetails(
+                        item = item,
+                        onClickContinueReading = onClickContinueReading
+                            ?.takeIf { item.unreadCount > 0 }
+                            ?.let { { it(item.libraryManga) } },
+                    )
+                }
+
+                Spacer(modifier = Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun CoverFlowItem(
+    item: LibraryItem,
+    isSelected: Boolean,
+    pageOffset: () -> Float,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+) {
+    val shape = MaterialTheme.shapes.medium
+    val coverData = item.coverData()
+    Column(
+        modifier = Modifier.graphicsLayer {
+            val offset = pageOffset().coerceIn(-4f, 4f)
+            val distance = offset.absoluteValue
+            val near = distance.coerceAtMost(1f)
+            val far = (distance - 1f).coerceAtLeast(0f)
+            rotationY = offset.sign * near * MAX_TILT
+            val scale = 1f - near * 0.18f - far * 0.05f
+            scaleX = scale
+            scaleY = scale
+            // Pull the tilted neighbours in towards the centre so the flow feels continuous
+            translationX = -offset.sign * size.width * (near * 0.2f + far * 0.42f)
+            alpha = 1f - far * 0.3f
+            cameraDistance = 14f * density
+        },
+    ) {
+        MangaCover.Book(
+            data = coverData,
+            shape = shape,
+            modifier = Modifier
+                .fillMaxWidth()
+                .shadow(elevation = 18.dp, shape = shape)
+                .then(
+                    if (isSelected) {
+                        Modifier.border(3.dp, MaterialTheme.colorScheme.primary, shape)
+                    } else {
+                        Modifier
+                    },
+                )
+                .combinedClickable(onClick = onClick, onLongClick = onLongClick),
+        )
+
+        // Mirror reflection fading into the floor
+        Box(
+            modifier = Modifier
+                .padding(top = 6.dp)
+                .fillMaxWidth()
+                .height(48.dp)
+                .clipToBounds(),
+        ) {
+            MangaCover.Book(
+                data = coverData,
+                shape = shape,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .wrapContentHeight(align = Alignment.Top, unbounded = true)
+                    .graphicsLayer {
+                        scaleY = -1f
+                        compositingStrategy = CompositingStrategy.Offscreen
+                    }
+                    .drawWithContent {
+                        drawContent()
+                        drawRect(
+                            brush = Brush.verticalGradient(
+                                0f to Color.Transparent,
+                                0.82f to Color.Transparent,
+                                1f to Color.Black.copy(alpha = 0.3f),
+                            ),
+                            blendMode = BlendMode.DstIn,
+                        )
+                    },
+            )
+        }
+    }
+}
+
+@Composable
+private fun CoverFlowDetails(
+    item: LibraryItem,
+    onClickContinueReading: (() -> Unit)?,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = MaterialTheme.padding.extraLarge),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+    ) {
+        Text(
+            text = item.libraryManga.manga.title,
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.heightIn(min = 32.dp),
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small)) {
+            BadgeGroup {
+                DownloadsBadge(count = item.badges.downloadCount)
+                UnreadBadge(count = item.badges.unreadCount)
+            }
+            BadgeGroup {
+                LanguageBadge(
+                    isLocal = item.badges.isLocal,
+                    sourceLanguage = item.badges.sourceLanguage,
+                )
+            }
+        }
+        if (onClickContinueReading != null) {
+            FilledTonalButton(onClick = onClickContinueReading) {
+                Icon(
+                    imageVector = MaterialSymbols.RoundedFilled.PlayArrow,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+                Spacer(modifier = Modifier.width(MaterialTheme.padding.extraSmall))
+                Text(stringResource(MR.strings.action_resume))
+            }
+        }
+    }
+}
+
+private fun LibraryItem.coverData(): MangaCoverModel {
+    val manga = libraryManga.manga
+    return MangaCoverModel(
+        mangaId = manga.id,
+        sourceId = manga.source,
+        isMangaFavorite = manga.favorite,
+        url = manga.thumbnailUrl,
+        lastModified = manga.coverLastModified,
+    )
+}
+
+private const val MAX_TILT = 52f

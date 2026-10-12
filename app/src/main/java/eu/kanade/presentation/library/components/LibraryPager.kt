@@ -66,7 +66,7 @@ fun LibraryPager(
         }
 
         val displayMode by getDisplayMode(page)
-        val columns by if (displayMode != LibraryDisplayMode.List) {
+        val columns by if (displayMode != LibraryDisplayMode.List && displayMode != LibraryDisplayMode.CoverFlow) {
             val configuration = LocalConfiguration.current
             val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
@@ -96,6 +96,18 @@ fun LibraryPager(
                     items = items,
                     showTitle = displayMode is LibraryDisplayMode.CompactGrid,
                     columns = columns,
+                    contentPadding = contentPadding,
+                    selection = selection,
+                    onClick = onClickManga,
+                    onLongClick = onLongClickManga,
+                    onClickContinueReading = onClickContinueReading,
+                    searchQuery = searchQuery,
+                    onGlobalSearchClicked = onGlobalSearchClicked,
+                )
+            }
+            LibraryDisplayMode.CoverFlow -> {
+                LibraryCoverFlow(
+                    items = items,
                     contentPadding = contentPadding,
                     selection = selection,
                     onClick = onClickManga,

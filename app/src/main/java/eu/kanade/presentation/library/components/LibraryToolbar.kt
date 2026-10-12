@@ -10,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
 import eu.kanade.presentation.components.AppBar
@@ -118,6 +119,7 @@ private fun LibraryRegularToolbar(
             )
         },
         scrollBehavior = scrollBehavior,
+        backgroundColor = Color.Transparent.takeIf { LocalLibraryStyle.current.hasBackground },
     )
 }
 

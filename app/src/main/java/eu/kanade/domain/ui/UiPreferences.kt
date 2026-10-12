@@ -4,6 +4,7 @@ import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
 import eu.kanade.domain.ui.model.AppTheme
+import eu.kanade.domain.ui.model.LibraryBackground
 import eu.kanade.domain.ui.model.TabletUiMode
 import eu.kanade.domain.ui.model.ThemeMode
 import eu.kanade.tachiyomi.util.system.isDynamicColorAvailable
@@ -28,6 +29,15 @@ class UiPreferences(
     )
 
     val themeDarkAmoled: Preference<Boolean> = preferenceStore.getBoolean("pref_theme_dark_amoled_key", false)
+
+    val libraryBackground: Preference<LibraryBackground> = preferenceStore.getEnum(
+        "pref_library_background",
+        LibraryBackground.AURORA,
+    )
+
+    val libraryBackgroundImage: Preference<String> = preferenceStore.getString("pref_library_background_image", "")
+
+    val libraryAnimations: Preference<Boolean> = preferenceStore.getBoolean("pref_library_animations", true)
 
     val relativeTime: Preference<Boolean> = preferenceStore.getBoolean("relative_time_v2", true)
 

@@ -111,6 +111,7 @@ fun MangaScreen(
     onEditFetchIntervalClicked: (() -> Unit)?,
     onMigrateClicked: (() -> Unit)?,
     onEditNotesClicked: () -> Unit,
+    onReviewsClicked: () -> Unit,
 
     // For bottom action menu
     onMultiBookmarkClicked: (List<Chapter>, bookmarked: Boolean) -> Unit,
@@ -161,6 +162,7 @@ fun MangaScreen(
             onEditIntervalClicked = onEditFetchIntervalClicked,
             onMigrateClicked = onMigrateClicked,
             onEditNotesClicked = onEditNotesClicked,
+            onReviewsClicked = onReviewsClicked,
             onMultiBookmarkClicked = onMultiBookmarkClicked,
             onMultiMarkAsReadClicked = onMultiMarkAsReadClicked,
             onMarkPreviousAsReadClicked = onMarkPreviousAsReadClicked,
@@ -198,6 +200,7 @@ fun MangaScreen(
             onEditIntervalClicked = onEditFetchIntervalClicked,
             onMigrateClicked = onMigrateClicked,
             onEditNotesClicked = onEditNotesClicked,
+            onReviewsClicked = onReviewsClicked,
             onMultiBookmarkClicked = onMultiBookmarkClicked,
             onMultiMarkAsReadClicked = onMultiMarkAsReadClicked,
             onMarkPreviousAsReadClicked = onMarkPreviousAsReadClicked,
@@ -245,6 +248,7 @@ private fun MangaScreenSmallImpl(
     onEditIntervalClicked: (() -> Unit)?,
     onMigrateClicked: (() -> Unit)?,
     onEditNotesClicked: () -> Unit,
+    onReviewsClicked: () -> Unit,
 
     // For bottom action menu
     onMultiBookmarkClicked: (List<Chapter>, bookmarked: Boolean) -> Unit,
@@ -301,6 +305,7 @@ private fun MangaScreenSmallImpl(
                 onClickRefresh = onRefresh,
                 onClickMigrate = onMigrateClicked,
                 onClickEditNotes = onEditNotesClicked,
+                onClickReviews = onReviewsClicked,
                 actionModeCounter = state.selectedChapters.size,
                 onCancelActionMode = { onAllChapterSelected(false) },
                 onSelectAll = { onAllChapterSelected(true) },
@@ -477,6 +482,7 @@ fun MangaScreenLargeImpl(
     onEditIntervalClicked: (() -> Unit)?,
     onMigrateClicked: (() -> Unit)?,
     onEditNotesClicked: () -> Unit,
+    onReviewsClicked: () -> Unit,
 
     // For bottom action menu
     onMultiBookmarkClicked: (List<Chapter>, bookmarked: Boolean) -> Unit,
@@ -526,6 +532,7 @@ fun MangaScreenLargeImpl(
                 onClickRefresh = onRefresh,
                 onClickMigrate = onMigrateClicked,
                 onClickEditNotes = onEditNotesClicked,
+                onClickReviews = onReviewsClicked,
                 onCancelActionMode = { onAllChapterSelected(false) },
                 actionModeCounter = state.selectedChapters.size,
                 onSelectAll = { onAllChapterSelected(true) },
