@@ -20,28 +20,20 @@ The format is a modified version of [Keep a Changelog](https://keepachangelog.co
 - Add custom gradient library backgrounds, a separate toggle for gradient animation, GIF backgrounds and image blur
 - Add Cover flow option to tint the library background with the focused cover's colors
 - Improve Liquid Glass: clearer glass with lens refraction at the edges (Android 13+), iOS style scroll edge blur under top bars, glass toolbar buttons, floating glass selection bars and snackbars, and a frosted backdrop behind dialogs
-- Add experimental high quality reader renderer (Settings → Advanced → Use high quality renderer) with better image scaling, page transition animations, dual page view and display cutout handling ([@wwww-wwww](https://github.com/wwww-wwww)) ([#3388](https://github.com/mihonapp/mihon/pull/3388))
-  - Match background and transition page colors to the old reader ([@AntsyLich](https://github.com/AntsyLich)) ([#3765](https://github.com/mihonapp/mihon/pull/3765))
-  - Support the Fit width, Fit height and Original size scale types and the zoom start position ([@wwww-wwww](https://github.com/wwww-wwww)) ([#3801](https://github.com/mihonapp/mihon/pull/3801))
-  - Fix preloading and navigation across chapters, and right-to-left navigation ([@wwww-wwww](https://github.com/wwww-wwww)) ([#3823](https://github.com/mihonapp/mihon/pull/3823))
-  - Add a "None" page transition and fix the background color of animated images ([@wwww-wwww](https://github.com/wwww-wwww)) ([#3843](https://github.com/mihonapp/mihon/pull/3843))
-  - Improve transition and error pages, dual page animations and border cropping ([@wwww-wwww](https://github.com/wwww-wwww)) ([#3852](https://github.com/mihonapp/mihon/pull/3852))
-  - Fix navigation directions and long strip bounds, and fade in loaded pages ([@wwww-wwww](https://github.com/wwww-wwww)) ([#3870](https://github.com/mihonapp/mihon/pull/3870))
-  - Add a "Page flip" transition, a long strip minimum width setting and separate dual page settings, and show wide pages on their own in dual page view ([@wwww-wwww](https://github.com/wwww-wwww)) ([#3886](https://github.com/mihonapp/mihon/pull/3886))
-  - Fix freezes and running out of memory when jumping between pages with the slider ([@Danidukiyu](https://github.com/Danidukiyu)) ([#3872](https://github.com/mihonapp/mihon/pull/3872))
-  - Add HDR, ICC color profile and EXIF orientation support ([@wwww-wwww](https://github.com/wwww-wwww)) ([#3933](https://github.com/mihonapp/mihon/pull/3933))
-  - Add a page gap setting for long strip with gaps and a "Disable zoom out" setting for long strip modes ([@wwww-wwww](https://github.com/wwww-wwww)) ([#3933](https://github.com/mihonapp/mihon/pull/3933))
-  - Fix a crash on Android 15 and long strip progress and background color ([@wwww-wwww](https://github.com/wwww-wwww)) ([#3949](https://github.com/mihonapp/mihon/pull/3949))
-  - Keep the reader menu open while moving through pages with the slider ([@wwww-wwww](https://github.com/wwww-wwww)) ([#3956](https://github.com/mihonapp/mihon/pull/3956))
-  - Show pages progressively while they download ([@wwww-wwww](https://github.com/wwww-wwww)) ([#4023](https://github.com/mihonapp/mihon/pull/4023))
-  - Lower memory use for animated images and support cropping borders in long strip ([@wwww-wwww](https://github.com/wwww-wwww)) ([#4029](https://github.com/mihonapp/mihon/pull/4029))
-  - Pair more wide pages in dual page view by comparing them with neighbouring pages ([@wwww-wwww](https://github.com/wwww-wwww)) ([#4051](https://github.com/mihonapp/mihon/pull/4051))
 
-### Changed
-- Use a new decoder for images Android can't decode itself, like AVIF, JPEG XL and HEIF, and support JPEG 2000 images ([@wwww-wwww](https://github.com/wwww-wwww)) ([#3786](https://github.com/mihonapp/mihon/pull/3786))
-
-### Removed
-- Remove "Custom hardware bitmap threshold" and "Custom display profile" advanced settings ([@wwww-wwww](https://github.com/wwww-wwww)) ([#3786](https://github.com/mihonapp/mihon/pull/3786))
+## [v0.21.1] - 2026-10-12
+### Fixed
+- Fixed refreshing chapters failing with the app language set to Arabic or another language with its own digits ([@AntsyLich](https://github.com/AntsyLich)) ([`8457fb9`](https://github.com/mihonapp/mihon/commit/8457fb9))
+- Fixed a crash on launch on some Samsung devices running Android 9 to 11 ([@AntsyLich](https://github.com/AntsyLich)) ([`abb126a`](https://github.com/mihonapp/mihon/commit/abb126a))
+- Fixed the start and resume button going under the taskbar on tablets ([@AntsyLich](https://github.com/AntsyLich)) ([`c279291`](https://github.com/mihonapp/mihon/commit/c279291))
+- Fixed a crash when updating an extension while others were installing ([@AntsyLich](https://github.com/AntsyLich)) ([`07b9fb6`](https://github.com/mihonapp/mihon/commit/07b9fb6))
+- Fixed library entries without a date added getting their last update time as date added when updating from v0.20.x ([@AntsyLich](https://github.com/AntsyLich)) ([`6dffca1`](https://github.com/mihonapp/mihon/commit/6dffca1))
+- Fixed the app closing when WebView's page process crashed ([@AntsyLich](https://github.com/AntsyLich)) ([`649fc83`](https://github.com/mihonapp/mihon/commit/649fc83))
+- Fixed installing or updating an extension sometimes cancelling the install of another one ([@AntsyLich](https://github.com/AntsyLich)) ([`ae749bb`](https://github.com/mihonapp/mihon/commit/ae749bb))
+- Fixed updating from v0.20.x taking up to hours on libraries with many duplicate entries ([@AntsyLich](https://github.com/AntsyLich)) ([`a999e49`](https://github.com/mihonapp/mihon/commit/a999e49))
+- Fixed the app staying on the updating screen for good when updating its data failed, it now shows what went wrong, and updating failing on leftover data of deleted entries ([@AntsyLich](https://github.com/AntsyLich)) ([`9dbb714`](https://github.com/mihonapp/mihon/commit/9dbb714))
+- Fixed library updates ignoring the smart update restrictions for entries whose details were never fetched ([@AntsyLich](https://github.com/AntsyLich)) ([`010ac71`](https://github.com/mihonapp/mihon/commit/010ac71))
+- Fixed resuming a chapter sometimes opening the next chapter partway through, and saving progress to it, in the right to left reader ([@AntsyLich](https://github.com/AntsyLich)) ([`51b61a3`](https://github.com/mihonapp/mihon/commit/51b61a3))
 
 ## [v0.21.0] - 2026-10-12
 ### Added
@@ -789,7 +781,8 @@ Same as v0.19.6
 - Branding to Mihon ([@AntsyLich](https://github.com/AntsyLich))
 - Minimum supported Android version to 8 ([@AntsyLich](https://github.com/AntsyLich)) ([`dfb3091`](https://github.com/mihonapp/mihon/commit/dfb3091e380dda3e9bfb64bf5c9a685cf3a03d0e))
 
-[unreleased]: https://github.com/mihonapp/mihon/compare/v0.21.0...main
+[unreleased]: https://github.com/mihonapp/mihon/compare/v0.21.1...main
+[v0.21.1]: https://github.com/mihonapp/mihon/compare/v0.21.0...v0.21.1
 [v0.21.0]: https://github.com/mihonapp/mihon/compare/v0.20.4...v0.21.0
 [v0.20.4]: https://github.com/mihonapp/mihon/compare/v0.20.3...v0.20.4
 [v0.20.3]: https://github.com/mihonapp/mihon/compare/v0.20.2...v0.20.3
