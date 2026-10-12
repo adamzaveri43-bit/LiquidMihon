@@ -33,6 +33,8 @@ import cafe.adriel.voyager.navigator.tab.TabOptions
 import dev.zacsweers.metrox.viewmodel.metroViewModel
 import eu.kanade.domain.ui.model.LibraryBackground
 import eu.kanade.presentation.category.components.ChangeCategoryDialog
+import eu.kanade.presentation.components.LocalBookOpener
+import eu.kanade.presentation.components.openReader
 import eu.kanade.presentation.library.DeleteLibraryMangaDialog
 import eu.kanade.presentation.library.LibrarySettingsDialog
 import eu.kanade.presentation.library.components.LibraryBackgroundLayer
@@ -98,6 +100,7 @@ data object LibraryTab : Tab {
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val context = LocalContext.current
+        val bookOpener = LocalBookOpener.current
         val scope = rememberCoroutineScope()
         val haptic = LocalHapticFeedback.current
 
@@ -127,6 +130,7 @@ data object LibraryTab : Tab {
         val libraryBackgroundAnimated by uiPreferences.libraryBackgroundAnimated.collectAsState()
         val libraryGradientColors by uiPreferences.libraryGradientColors.collectAsState()
         val libraryBackgroundBlur by uiPreferences.libraryBackgroundBlur.collectAsState()
+        val libraryBackgroundDim by uiPreferences.libraryBackgroundDim.collectAsState()
         val adaptiveBackground by uiPreferences.libraryCoverFlowAdaptiveBackground.collectAsState()
         val coverColors = remember { mutableStateOf<List<Color>?>(null) }
         val activeCoverColors = coverColors.value.takeIf { adaptiveBackground }
@@ -143,6 +147,7 @@ data object LibraryTab : Tab {
                 animate = libraryBackgroundAnimated,
                 blur = libraryBackgroundBlur,
                 coverColors = activeCoverColors,
+                imageDim = libraryBackgroundDim / 100f,
             )
             CompositionLocalProvider(
                 LocalLibraryStyle provides libraryStyle,
@@ -239,8 +244,11 @@ data object LibraryTab : Tab {
                                     scope.launch {
                                         val chapter = viewModel.getNextUnreadChapter(it.manga)
                                         if (chapter != null) {
-                                            context.startActivity(
-                                                ReaderActivity.newIntent(context, chapter.mangaId, chapter.id),
+                                            context.openReader(
+                                                opener = bookOpener,
+                                                cover = it.manga,
+                                                title = chapter.name,
+                                                intent = ReaderActivity.newIntent(context, chapter.mangaId, chapter.id),
                                             )
                                         } else {
                                             snackbarHostState.showSnackbar(

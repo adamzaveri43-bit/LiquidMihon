@@ -23,6 +23,7 @@ import eu.kanade.presentation.more.settings.screen.appearance.AppLanguageScreen
 import eu.kanade.presentation.more.settings.widget.AccentColorPreferenceWidget
 import eu.kanade.presentation.more.settings.widget.AppThemeModePreferenceWidget
 import eu.kanade.presentation.more.settings.widget.AppThemePreferenceWidget
+import eu.kanade.presentation.more.settings.widget.UiPresetsPreferenceWidget
 import eu.kanade.tachiyomi.util.system.toast
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toJavaLocalDateTime
@@ -68,6 +69,11 @@ object SettingsAppearanceScreen : SearchableSettings {
         return Preference.PreferenceGroup(
             title = stringResource(MR.strings.pref_category_theme),
             preferenceItems = listOf(
+                Preference.PreferenceItem.CustomPreference(
+                    title = stringResource(MR.strings.pref_ui_presets),
+                ) {
+                    UiPresetsPreferenceWidget(uiPreferences = uiPreferences)
+                },
                 Preference.PreferenceItem.CustomPreference(
                     title = stringResource(MR.strings.pref_app_theme),
                 ) {
@@ -122,6 +128,11 @@ object SettingsAppearanceScreen : SearchableSettings {
                         },
                     )
                 },
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = uiPreferences.readingAnimation,
+                    title = stringResource(MR.strings.pref_reading_animation),
+                    subtitle = stringResource(MR.strings.pref_reading_animation_summary),
+                ),
                 Preference.PreferenceItem.ListPreference(
                     preference = uiPreferences.appFont,
                     entries = AppFont.entries.associateWith { stringResource(it.titleRes) },

@@ -59,6 +59,15 @@ class UiPreferences(
     /** Blur radius in dp applied to an image background. */
     val libraryBackgroundBlur: Preference<Int> = preferenceStore.getInt("pref_library_background_blur", 0)
 
+    /** How much an image background is darkened (or lightened in light mode), in percent. */
+    val libraryBackgroundDim: Preference<Int> = preferenceStore.getInt("pref_library_background_dim", 50)
+
+    /** Show the cover swinging open before the reader when resuming. */
+    val readingAnimation: Preference<Boolean> = preferenceStore.getBoolean("pref_reading_animation", true)
+
+    /** User saved UI presets, as JSON. */
+    val uiPresets: Preference<String> = preferenceStore.getString("pref_ui_presets", "")
+
     val libraryCoverFlowAdaptiveBackground: Preference<Boolean> = preferenceStore.getBoolean(
         "pref_library_cover_flow_adaptive_background",
         true,

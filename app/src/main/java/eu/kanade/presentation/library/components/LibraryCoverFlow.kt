@@ -26,6 +26,8 @@ import androidx.compose.foundation.pager.PageSize
 import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.pager.PagerSnapDistance
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -63,6 +65,9 @@ import mihon.icons.materialsymbols.roundedfilled.PlayArrow
 import tachiyomi.domain.library.model.LibraryManga
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.BadgeGroup
+import tachiyomi.presentation.core.components.glass.LiquidGlassDefaults
+import tachiyomi.presentation.core.components.glass.LocalLiquidGlass
+import tachiyomi.presentation.core.components.glass.liquidGlass
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.i18n.stringResource
 import kotlin.math.absoluteValue
@@ -303,7 +308,27 @@ private fun CoverFlowDetails(
             }
         }
         if (onClickContinueReading != null) {
-            FilledTonalButton(onClick = onClickContinueReading) {
+            val glass = LocalLiquidGlass.current
+            FilledTonalButton(
+                onClick = onClickContinueReading,
+                colors = if (glass) {
+                    ButtonDefaults.filledTonalButtonColors(
+                        containerColor = Color.Transparent,
+                        contentColor = MaterialTheme.colorScheme.primary,
+                    )
+                } else {
+                    ButtonDefaults.filledTonalButtonColors()
+                },
+                modifier = if (glass) {
+                    Modifier.liquidGlass(
+                        shape = CircleShape,
+                        colors = LiquidGlassDefaults.colors(),
+                        shadowElevation = 8.dp,
+                    )
+                } else {
+                    Modifier
+                },
+            ) {
                 Icon(
                     imageVector = MaterialSymbols.RoundedFilled.PlayArrow,
                     contentDescription = null,

@@ -40,6 +40,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import eu.kanade.domain.ui.UiPresets
 import eu.kanade.domain.ui.model.LibraryBackground
 import eu.kanade.presentation.library.components.DefaultCustomGradient
 import eu.kanade.presentation.library.components.parseGradientColors
@@ -74,12 +75,17 @@ internal fun LibraryAppearanceSettings() {
     val gradientColorsPref by uiPreferences.libraryGradientColors.collectAsState()
     val gradientColors = remember(gradientColorsPref) { parseGradientColors(gradientColorsPref) }
     val blur by uiPreferences.libraryBackgroundBlur.collectAsState()
+    val dim by uiPreferences.libraryBackgroundDim.collectAsState()
     var showGradientEditor by remember { mutableStateOf(false) }
 
     val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         scope.launch {
-            val path = withContext(Dispatchers.IO) { context.copyBackgroundImage(uri) } ?: return@launch
+            val path = withContext(Dispatchers.IO) {
+                // Keep images that saved presets still point to
+                val keep = UiPresets.saved(uiPreferences).mapNotNull { it.libraryBackgroundImage }.toSet()
+                context.copyBackgroundImage(uri, keep)
+            } ?: return@launch
             uiPreferences.libraryBackgroundImage.set(path)
             uiPreferences.libraryBackground.set(LibraryBackground.CUSTOM)
         }
@@ -140,6 +146,15 @@ internal fun LibraryAppearanceSettings() {
                 valueRange = 0..25,
                 label = stringResource(MR.strings.library_background_blur),
                 onChange = uiPreferences.libraryBackgroundBlur::set,
+                pillColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+            )
+            SliderItem(
+                value = dim,
+                valueRange = 0..90 step 5,
+                steps = 17,
+                label = stringResource(MR.strings.library_background_dim),
+                valueString = "$dim%",
+                onChange = uiPreferences.libraryBackgroundDim::set,
                 pillColor = MaterialTheme.colorScheme.surfaceContainerHighest,
             )
         }
@@ -328,10 +343,10 @@ private fun randomVividColor(): Color = Color(
 /**
  * Copies the picked image into app storage so it survives the picker's temporary permission.
  */
-private fun Context.copyBackgroundImage(uri: Uri): String? {
+private fun Context.copyBackgroundImage(uri: Uri, keep: Set<String>): String? {
     return try {
         val dir = File(filesDir, "library_background").apply { mkdirs() }
-        dir.listFiles()?.forEach { it.delete() }
+        dir.listFiles()?.filterNot { it.absolutePath in keep }?.forEach { it.delete() }
         // Unique name so cached decodes of a previous image are never reused
         val file = File(dir, "background_${System.currentTimeMillis()}")
         val copied = contentResolver.openInputStream(uri)?.use { input ->

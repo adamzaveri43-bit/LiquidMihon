@@ -137,6 +137,14 @@
     <string name="library_background_change_image">Change image</string>
     <string name="library_background_edit_colors">Edit colors</string>
     <string name="library_background_blur">Blur</string>
+    <string name="library_background_dim">Dim</string>
+    <string name="pref_ui_presets">UI presets</string>
+    <string name="ui_preset_save">Save current</string>
+    <string name="ui_preset_name">Preset name</string>
+    <string name="ui_preset_delete">Delete preset \"%s\"?</string>
+    <string name="ui_preset_hint">Tap to apply, long press a saved preset to delete it</string>
+    <string name="pref_reading_animation">Book opening animation</string>
+    <string name="pref_reading_animation_summary">Show the cover opening into the reader when resuming</string>
     <string name="library_background_animated">Animate gradient</string>
     <string name="library_background_cover_flow_adaptive">Cover flow: match background to cover</string>
     <string name="library_animations">Item animations</string>

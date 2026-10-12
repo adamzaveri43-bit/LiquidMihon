@@ -24,6 +24,10 @@ The format is a modified version of [Keep a Changelog](https://keepachangelog.co
 - Add accent color picker and app-wide font choice (Appearance)
 - Fix background gradients barely moving and stopping when system animations are reduced
 - Fix the Cover flow reflection ending in a visible edge
+- Add UI presets to switch the whole look at once (Liquid Glass, Frutiger Aero, Classic, or your own saved ones)
+- Add book opening animation when resuming: the cover swings open into the reader
+- Add dimming control for image backgrounds
+- Glass resume button, manga action row and menus
 
 ## [v0.21.1] - 2026-10-12
 ### Fixed

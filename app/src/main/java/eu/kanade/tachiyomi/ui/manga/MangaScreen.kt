@@ -25,7 +25,9 @@ import eu.kanade.domain.manga.model.hasCustomCover
 import eu.kanade.domain.manga.model.toSManga
 import eu.kanade.presentation.browse.components.RemoveMangaDialog
 import eu.kanade.presentation.category.components.ChangeCategoryDialog
+import eu.kanade.presentation.components.LocalBookOpener
 import eu.kanade.presentation.components.NavigatorAdaptiveSheet
+import eu.kanade.presentation.components.openReader
 import eu.kanade.presentation.manga.ChapterSettingsDialog
 import eu.kanade.presentation.manga.DuplicateMangaDialog
 import eu.kanade.presentation.manga.EditCoverAction
@@ -77,6 +79,7 @@ class MangaScreen(
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val context = LocalContext.current
+        val bookOpener = LocalBookOpener.current
         val haptic = LocalHapticFeedback.current
         val scope = rememberCoroutineScope()
         val viewModel =
@@ -149,7 +152,16 @@ class MangaScreen(
             onTagSearch = { scope.launch { performGenreSearch(navigator, it, viewModel.source!!) } },
             onFilterButtonClicked = viewModel::showSettingsDialog,
             onRefresh = viewModel::fetchAllFromSource,
-            onContinueReading = { continueReading(context, viewModel.getNextUnreadChapter()) },
+            onContinueReading = {
+                viewModel.getNextUnreadChapter()?.let { chapter ->
+                    context.openReader(
+                        opener = bookOpener,
+                        cover = successState.manga,
+                        title = chapter.name,
+                        intent = ReaderActivity.newIntent(context, chapter.mangaId, chapter.id),
+                    )
+                }
+            },
             onSearch = { query, global -> scope.launch { performSearch(navigator, query, global) } },
             onCoverClicked = viewModel::showCoverDialog,
             onShareClicked = { shareManga(context, viewModel.manga, viewModel.source) }.takeIf { isHttpSource },
@@ -299,10 +311,6 @@ class MangaScreen(
                 onConfirm = viewModel::setExcludedScanlators,
             )
         }
-    }
-
-    private fun continueReading(context: Context, unreadChapter: Chapter?) {
-        if (unreadChapter != null) openChapter(context, unreadChapter)
     }
 
     private fun openChapter(context: Context, chapter: Chapter) {

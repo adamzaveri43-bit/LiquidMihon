@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.DropdownMenuItem
@@ -100,6 +101,9 @@ import org.intellij.markdown.MarkdownTokenTypes
 import org.intellij.markdown.ast.findChildOfType
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.MR
+import tachiyomi.presentation.core.components.glass.LiquidGlassDefaults
+import tachiyomi.presentation.core.components.glass.LocalLiquidGlass
+import tachiyomi.presentation.core.components.glass.liquidGlass
 import tachiyomi.presentation.core.components.material.DISABLED_ALPHA
 import tachiyomi.presentation.core.components.material.TextButton
 import tachiyomi.presentation.core.components.material.padding
@@ -198,7 +202,21 @@ fun MangaActionRow(
         }
     }
 
-    Row(modifier = modifier.padding(start = 16.dp, top = 8.dp, end = 16.dp)) {
+    // Glass styles: the actions sit in one glass panel. It's part of the scrolling content, so no backdrop
+    val glassModifier = if (LocalLiquidGlass.current) {
+        Modifier.liquidGlass(
+            shape = RoundedCornerShape(24.dp),
+            colors = LiquidGlassDefaults.colors(),
+            cornerRadius = 24.dp,
+        )
+    } else {
+        Modifier
+    }
+    Row(
+        modifier = modifier
+            .padding(start = 16.dp, top = 8.dp, end = 16.dp)
+            .then(glassModifier),
+    ) {
         MangaActionButton(
             title = if (favorite) {
                 stringResource(MR.strings.in_library)

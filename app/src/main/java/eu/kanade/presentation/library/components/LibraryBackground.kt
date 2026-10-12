@@ -72,6 +72,7 @@ fun LibraryBackgroundLayer(
     blur: Int,
     coverColors: List<Color>?,
     modifier: Modifier = Modifier,
+    imageDim: Float = 0.5f,
 ) {
     val baseColor = MaterialTheme.colorScheme.background
     val isDark = baseColor.luminance() < 0.5f
@@ -107,7 +108,7 @@ fun LibraryBackgroundLayer(
         }
         if (coverColors != null || background != LibraryBackground.NONE) {
             // Keeps titles and badges readable on top of busy backgrounds
-            val scrim = if (coverColors == null && background == LibraryBackground.CUSTOM) 0.5f else 0.2f
+            val scrim = if (coverColors == null && background == LibraryBackground.CUSTOM) imageDim else 0.2f
             Box(
                 modifier = Modifier
                     .fillMaxSize()

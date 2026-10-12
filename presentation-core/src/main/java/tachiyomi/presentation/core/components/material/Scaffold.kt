@@ -80,7 +80,9 @@ fun Scaffold(
                     .padding(bottom = if (fabHeight == 0) 0.dp else floatingBottomBarPadding)
                     .onSizeChanged { fabHeight = it.height },
             ) {
-                floatingActionButton()
+                CompositionLocalProvider(LocalLiquidGlassBackdrop provides backdrop) {
+                    floatingActionButton()
+                }
             }
         },
         floatingActionButtonPosition = floatingActionButtonPosition,
