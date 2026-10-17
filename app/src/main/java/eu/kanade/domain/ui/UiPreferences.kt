@@ -65,6 +65,12 @@ class UiPreferences(
     /** Show the cover swinging open before the reader when resuming. */
     val readingAnimation: Preference<Boolean> = preferenceStore.getBoolean("pref_reading_animation", true)
 
+    /** Library folders, as JSON. */
+    val libraryFolders: Preference<String> = preferenceStore.getString("pref_library_folders", "")
+
+    /** Hand arranged order of library entries for the custom sort, as comma separated entry keys. */
+    val libraryCustomOrder: Preference<String> = preferenceStore.getString("pref_library_custom_order", "")
+
     /** User saved UI presets, as JSON. */
     val uiPresets: Preference<String> = preferenceStore.getString("pref_ui_presets", "")
 

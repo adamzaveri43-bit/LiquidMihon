@@ -1,7 +1,12 @@
 package eu.kanade.tachiyomi.ui.library
 
+import android.content.Context
+import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.ReportDrawnWhen
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.graphics.res.animatedVectorResource
 import androidx.compose.animation.graphics.res.rememberAnimatedVectorPainter
 import androidx.compose.animation.graphics.vector.AnimatedImageVector
@@ -17,6 +22,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -35,12 +42,19 @@ import eu.kanade.domain.ui.model.LibraryBackground
 import eu.kanade.presentation.category.components.ChangeCategoryDialog
 import eu.kanade.presentation.components.LocalBookOpener
 import eu.kanade.presentation.components.openReader
+import eu.kanade.presentation.library.AddToFolderDialog
+import eu.kanade.presentation.library.DeleteFolderDialog
 import eu.kanade.presentation.library.DeleteLibraryMangaDialog
+import eu.kanade.presentation.library.FolderCoverDialog
+import eu.kanade.presentation.library.FolderNameDialog
+import eu.kanade.presentation.library.FolderOptionsDialog
+import eu.kanade.presentation.library.LibraryReorderDialog
 import eu.kanade.presentation.library.LibrarySettingsDialog
 import eu.kanade.presentation.library.components.LibraryBackgroundLayer
 import eu.kanade.presentation.library.components.LibraryContent
 import eu.kanade.presentation.library.components.LibraryStyle
 import eu.kanade.presentation.library.components.LibraryToolbar
+import eu.kanade.presentation.library.components.LibraryToolbarTitle
 import eu.kanade.presentation.library.components.LocalLibraryCoverColors
 import eu.kanade.presentation.library.components.LocalLibraryStyle
 import eu.kanade.presentation.library.components.parseGradientColors
@@ -52,19 +66,25 @@ import eu.kanade.tachiyomi.data.library.LibraryUpdateWorker
 import eu.kanade.tachiyomi.ui.browse.source.globalsearch.GlobalSearchScreen
 import eu.kanade.tachiyomi.ui.category.CategoryScreen
 import eu.kanade.tachiyomi.ui.home.HomeScreen
+import eu.kanade.tachiyomi.ui.library.folder.FolderCover
+import eu.kanade.tachiyomi.ui.library.folder.LibraryFolder
 import eu.kanade.tachiyomi.ui.main.MainActivity
 import eu.kanade.tachiyomi.ui.manga.MangaScreen
 import eu.kanade.tachiyomi.ui.reader.ReaderActivity
 import eu.kanade.tachiyomi.util.system.workManager
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import logcat.LogPriority
 import mihon.app.di.appGraph
 import mihon.feature.migration.config.MigrationConfigScreen
 import mihon.icons.materialsymbols.MaterialSymbols
 import mihon.icons.materialsymbols.automirroredrounded.Help
 import tachiyomi.core.common.i18n.stringResource
+import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.library.model.LibraryManga
 import tachiyomi.domain.manga.model.Manga
@@ -77,6 +97,7 @@ import tachiyomi.presentation.core.screens.EmptyScreenAction
 import tachiyomi.presentation.core.screens.LoadingScreen
 import tachiyomi.presentation.core.util.collectAsState
 import tachiyomi.source.local.isLocal
+import java.io.File
 
 data object LibraryTab : Tab {
 
@@ -160,11 +181,21 @@ data object LibraryTab : Tab {
                         MaterialTheme.colorScheme.background
                     },
                     topBar = { scrollBehavior ->
-                        val title = state.getToolbarTitle(
-                            defaultTitle = stringResource(MR.strings.label_library),
-                            defaultCategoryTitle = stringResource(MR.strings.label_default),
-                            page = state.coercedActiveCategoryIndex,
-                        )
+                        val openFolder = state.openFolder
+                        val title = if (openFolder != null) {
+                            LibraryToolbarTitle(
+                                text = openFolder.name,
+                                numberOfManga = state.activeCategory
+                                    ?.let { state.getEntriesForCategory(it).size }
+                                    ?.takeIf { state.showMangaCount },
+                            )
+                        } else {
+                            state.getToolbarTitle(
+                                defaultTitle = stringResource(MR.strings.label_library),
+                                defaultCategoryTitle = stringResource(MR.strings.label_default),
+                                page = state.coercedActiveCategoryIndex,
+                            )
+                        }
                         LibraryToolbar(
                             hasActiveFilters = state.hasActiveFilters,
                             selectedCount = state.selection.size,
@@ -187,10 +218,12 @@ data object LibraryTab : Tab {
                                     }
                                 }
                             },
+                            onClickReorder = { viewModel.openReorderDialog() },
                             searchQuery = state.searchQuery,
                             onSearchQueryChange = viewModel::search,
                             // For scroll overlay when no tab
                             scrollBehavior = scrollBehavior.takeIf { !state.showCategoryTabs },
+                            navigateUp = viewModel::closeFolder.takeIf { openFolder != null },
                         )
                     },
                     bottomBar = {
@@ -207,6 +240,7 @@ data object LibraryTab : Tab {
                                 viewModel.clearSelection()
                                 navigator.push(MigrationConfigScreen(selection))
                             },
+                            onFolderClicked = viewModel::openAddToFolderDialog,
                         )
                     },
                     snackbarHost = { GlassSnackbarHost(hostState = snackbarHostState) },
@@ -270,7 +304,9 @@ data object LibraryTab : Tab {
                                 getItemCountForCategory = { state.getItemCountForCategory(it) },
                                 getDisplayMode = { viewModel.getDisplayMode() },
                                 getColumnsForOrientation = { viewModel.getColumnsForOrientation(it) },
-                                getItemsForCategory = { state.getItemsForCategory(it) },
+                                getEntriesForCategory = { state.getEntriesForCategory(it) },
+                                onClickFolder = { viewModel.openFolder(it.folder.id) },
+                                onLongClickFolder = { viewModel.openFolderOptions(it.folder.id) },
                             )
                         }
                     }
@@ -279,7 +315,94 @@ data object LibraryTab : Tab {
         }
 
         val onDismissRequest = viewModel::closeDialog
+        // The folder an image is being picked for, kept while the picker is open
+        var pickingCoverForFolder by rememberSaveable { mutableStateOf<Long?>(null) }
+        val pickFolderImage = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+            val folderId = pickingCoverForFolder ?: return@rememberLauncherForActivityResult
+            pickingCoverForFolder = null
+            if (uri == null) return@rememberLauncherForActivityResult
+            scope.launch {
+                val path = withContext(Dispatchers.IO) { context.copyFolderCoverImage(folderId, uri) }
+                    ?: return@launch
+                viewModel.setFolderCover(folderId, FolderCover.Image(path))
+            }
+        }
+        val findFolder: (Long) -> LibraryFolder? = { id -> state.folders.find { it.id == id } }
         when (val dialog = state.dialog) {
+            is LibraryViewModel.Dialog.AddToFolder -> {
+                AddToFolderDialog(
+                    folders = state.folders,
+                    canRemove = dialog.canRemove,
+                    onDismissRequest = onDismissRequest,
+                    onCreate = { viewModel.createFolder(it, dialog.mangaIds) },
+                    onAdd = { viewModel.addToFolder(it.id, dialog.mangaIds) },
+                    onRemove = { viewModel.removeFromFolder(dialog.mangaIds) },
+                )
+            }
+            is LibraryViewModel.Dialog.FolderOptions -> run {
+                // Gone if it was deleted meanwhile
+                val folder = findFolder(dialog.folderId) ?: return@run
+                FolderOptionsDialog(
+                    folder = folder,
+                    onDismissRequest = onDismissRequest,
+                    onRename = { viewModel.openRenameFolderDialog(folder.id) },
+                    onChangeCover = { viewModel.openFolderCoverDialog(folder.id) },
+                    onReorder = { viewModel.openReorderDialog(folder.id) },
+                    onDelete = { viewModel.openDeleteFolderDialog(folder.id) },
+                )
+            }
+            is LibraryViewModel.Dialog.RenameFolder -> run {
+                // Gone if it was deleted meanwhile
+                val folder = findFolder(dialog.folderId) ?: return@run
+                FolderNameDialog(
+                    title = stringResource(MR.strings.library_folder_rename),
+                    initialName = folder.name,
+                    confirmText = stringResource(MR.strings.action_save),
+                    onDismissRequest = onDismissRequest,
+                    onConfirm = {
+                        viewModel.renameFolder(folder.id, it)
+                        onDismissRequest()
+                    },
+                )
+            }
+            is LibraryViewModel.Dialog.FolderCover -> run {
+                // Gone if it was deleted meanwhile
+                val folder = findFolder(dialog.folderId) ?: return@run
+                val itemsById = state.libraryData.favoritesById
+                FolderCoverDialog(
+                    folder = folder,
+                    items = folder.mangaIds.mapNotNull { itemsById[it] },
+                    onDismissRequest = onDismissRequest,
+                    onSelect = { viewModel.setFolderCover(folder.id, it) },
+                    onPickImage = {
+                        pickingCoverForFolder = folder.id
+                        pickFolderImage.launch(
+                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                        )
+                    },
+                )
+            }
+            is LibraryViewModel.Dialog.DeleteFolder -> run {
+                // Gone if it was deleted meanwhile
+                val folder = findFolder(dialog.folderId) ?: return@run
+                DeleteFolderDialog(
+                    folder = folder,
+                    onDismissRequest = onDismissRequest,
+                    onConfirm = { viewModel.deleteFolder(folder.id) },
+                )
+            }
+            is LibraryViewModel.Dialog.Reorder -> {
+                val folder = dialog.folderId?.let(findFolder)
+                LibraryReorderDialog(
+                    title = folder?.name ?: stringResource(MR.strings.action_reorder),
+                    hint = stringResource(
+                        if (folder != null) MR.strings.library_reorder_folder_hint else MR.strings.library_reorder_hint,
+                    ),
+                    entries = dialog.entries,
+                    onDismissRequest = onDismissRequest,
+                    onSave = { viewModel.saveOrder(dialog.category, dialog.folderId, it) },
+                )
+            }
             is LibraryViewModel.Dialog.SettingsSheet -> run {
                 LibrarySettingsDialog(
                     onDismissRequest = onDismissRequest,
@@ -314,10 +437,11 @@ data object LibraryTab : Tab {
             null -> {}
         }
 
-        BackHandler(enabled = state.selectionMode || state.searchQuery != null) {
+        BackHandler(enabled = state.selectionMode || state.searchQuery != null || state.openFolder != null) {
             when {
                 state.selectionMode -> viewModel.clearSelection()
                 state.searchQuery != null -> viewModel.search(null)
+                else -> viewModel.closeFolder()
             }
         }
 
@@ -346,4 +470,22 @@ data object LibraryTab : Tab {
     // For opening settings sheet in LibraryController
     private val requestSettingsSheetEvent = Channel<Unit>()
     private suspend fun requestOpenSettingsSheet() = requestSettingsSheetEvent.send(Unit)
+}
+
+/**
+ * Copies a picked folder cover into app storage so it survives the picker's temporary permission.
+ */
+private fun Context.copyFolderCoverImage(folderId: Long, uri: Uri): String? {
+    return try {
+        val dir = File(filesDir, "library_folder_covers").apply { mkdirs() }
+        // Unique name so cached decodes of a previous image are never reused
+        val file = File(dir, "folder_${folderId}_${System.currentTimeMillis()}")
+        val copied = contentResolver.openInputStream(uri)?.use { input ->
+            file.outputStream().use { input.copyTo(it) }
+        }
+        if (copied == null) null else file.absolutePath
+    } catch (e: Exception) {
+        logcat(LogPriority.ERROR, e) { "Failed to copy folder cover" }
+        null
+    }
 }

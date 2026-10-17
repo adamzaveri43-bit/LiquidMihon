@@ -178,6 +178,7 @@ private fun ColumnScope.SortPage(
             MR.strings.action_sort_chapter_fetch_date to LibrarySort.Type.ChapterFetchDate,
             MR.strings.action_sort_date_added to LibrarySort.Type.DateAdded,
             trackerMeanPair,
+            MR.strings.action_sort_custom to LibrarySort.Type.Custom,
             MR.strings.action_sort_random to LibrarySort.Type.Random,
         )
     }

@@ -58,9 +58,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
 import eu.kanade.presentation.manga.components.MangaCover
 import eu.kanade.tachiyomi.ui.library.LibraryItem
+import eu.kanade.tachiyomi.ui.library.folder.LibraryEntry
+import eu.kanade.tachiyomi.ui.library.folder.coverData
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import mihon.icons.materialsymbols.MaterialSymbols
+import mihon.icons.materialsymbols.roundedfilled.Folder
 import mihon.icons.materialsymbols.roundedfilled.PlayArrow
 import tachiyomi.domain.library.model.LibraryManga
 import tachiyomi.i18n.MR
@@ -74,23 +77,24 @@ import tachiyomi.presentation.core.i18n.stringResource
 import kotlin.math.abs
 import kotlin.math.absoluteValue
 import kotlin.math.sign
-import tachiyomi.domain.manga.model.MangaCover as MangaCoverModel
 
 /**
  * Cover Flow: one cover front and center, its neighbours tilted away in 3D on either side.
  */
 @Composable
 internal fun LibraryCoverFlow(
-    items: List<LibraryItem>,
+    entries: List<LibraryEntry>,
     contentPadding: PaddingValues,
     selection: Set<Long>,
     onClick: (LibraryManga) -> Unit,
     onLongClick: (LibraryManga) -> Unit,
+    onClickFolder: (LibraryEntry.Folder) -> Unit,
+    onLongClickFolder: (LibraryEntry.Folder) -> Unit,
     onClickContinueReading: ((LibraryManga) -> Unit)?,
     searchQuery: String?,
     onGlobalSearchClicked: () -> Unit,
 ) {
-    val pagerState = rememberPagerState { items.size }
+    val pagerState = rememberPagerState { entries.size }
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
 
@@ -100,19 +104,20 @@ internal fun LibraryCoverFlow(
             .collect { haptic.performHapticFeedback(HapticFeedbackType.SegmentTick) }
     }
 
-    val current = items.getOrNull(pagerState.currentPage.coerceIn(0, (items.size - 1).coerceAtLeast(0)))
+    val current = entries.getOrNull(pagerState.currentPage.coerceIn(0, (entries.size - 1).coerceAtLeast(0)))
 
     // Tint the library background with the settled cover's colors
     val coverColors = LocalLibraryCoverColors.current
     if (coverColors != null) {
         val context = LocalContext.current
-        val colorCache = remember { mutableMapOf<Long, List<Color>>() }
+        val colorCache = remember { mutableMapOf<String, List<Color>>() }
         val lastWritten = remember { mutableListOf<List<Color>>() }
-        val settled = items.getOrNull(pagerState.settledPage)
-        LaunchedEffect(settled?.libraryManga?.id) {
-            val item = settled ?: return@LaunchedEffect
-            val id = item.libraryManga.manga.id
-            val colors = colorCache[id] ?: extractCoverColors(context, item.coverData())?.also { colorCache[id] = it }
+        val settled = entries.getOrNull(pagerState.settledPage)
+        LaunchedEffect(settled?.key) {
+            val entry = settled ?: return@LaunchedEffect
+            val coverData = entry.coverData() ?: return@LaunchedEffect
+            val colors = colorCache[entry.key]
+                ?: extractCoverColors(context, coverData)?.also { colorCache[entry.key] = it }
             if (colors != null) {
                 coverColors.value = colors
                 lastWritten.clear()
@@ -158,12 +163,12 @@ internal fun LibraryCoverFlow(
                         state = pagerState,
                         pagerSnapDistance = PagerSnapDistance.atMost(12),
                     ),
-                    key = { items[it].libraryManga.id },
+                    key = { entries[it].key },
                     modifier = Modifier
                         .fillMaxWidth()
                         // Taps are resolved by where they land in the row rather than by which cover is
                         // under the finger: neighbours are drawn over the edges of the focused cover
-                        .pointerInput(items, coverWidth) {
+                        .pointerInput(entries, coverWidth) {
                             val centerZone = coverWidth.toPx() * 0.6f
                             fun zone(x: Float): Int {
                                 val dx = x - size.width / 2f
@@ -179,24 +184,32 @@ internal fun LibraryCoverFlow(
                                     if (pagerState.isScrollInProgress) return@detectTapGestures
                                     val page = pagerState.currentPage
                                     when (val z = zone(position.x)) {
-                                        0 -> items.getOrNull(page)?.let { onClick(it.libraryManga) }
+                                        0 -> when (val entry = entries.getOrNull(page)) {
+                                            is LibraryEntry.Folder -> onClickFolder(entry)
+                                            is LibraryEntry.Manga -> onClick(entry.item.libraryManga)
+                                            null -> Unit
+                                        }
                                         else -> scope.launch {
-                                            pagerState.animateScrollToPage((page + z).coerceIn(0, items.lastIndex))
+                                            pagerState.animateScrollToPage((page + z).coerceIn(0, entries.lastIndex))
                                         }
                                     }
                                 },
                                 onLongPress = { position ->
                                     if (zone(position.x) == 0) {
-                                        items.getOrNull(pagerState.currentPage)?.let { onLongClick(it.libraryManga) }
+                                        when (val entry = entries.getOrNull(pagerState.currentPage)) {
+                                            is LibraryEntry.Folder -> onLongClickFolder(entry)
+                                            is LibraryEntry.Manga -> onLongClick(entry.item.libraryManga)
+                                            null -> Unit
+                                        }
                                     }
                                 },
                             )
                         },
                 ) { page ->
-                    val item = items[page]
+                    val entry = entries[page]
                     CoverFlowItem(
-                        item = item,
-                        isSelected = item.libraryManga.id in selection,
+                        coverData = entry.coverData(),
+                        isSelected = entry is LibraryEntry.Manga && entry.item.id in selection,
                         pageOffset = { (page - pagerState.currentPage) - pagerState.currentPageOffsetFraction },
                     )
                 }
@@ -206,16 +219,22 @@ internal fun LibraryCoverFlow(
                 AnimatedContent(
                     targetState = current,
                     transitionSpec = { fadeIn() togetherWith fadeOut() },
-                    contentKey = { it?.libraryManga?.id },
+                    contentKey = { it?.key },
                     label = "coverFlowDetails",
-                ) { item ->
-                    if (item == null) return@AnimatedContent
-                    CoverFlowDetails(
-                        item = item,
-                        onClickContinueReading = onClickContinueReading
-                            ?.takeIf { item.unreadCount > 0 }
-                            ?.let { { it(item.libraryManga) } },
-                    )
+                ) { entry ->
+                    when (entry) {
+                        is LibraryEntry.Folder -> CoverFlowFolderDetails(entry)
+                        is LibraryEntry.Manga -> {
+                            val item = entry.item
+                            CoverFlowDetails(
+                                item = item,
+                                onClickContinueReading = onClickContinueReading
+                                    ?.takeIf { item.unreadCount > 0 }
+                                    ?.let { { it(item.libraryManga) } },
+                            )
+                        }
+                        null -> Unit
+                    }
                 }
 
                 Spacer(modifier = Modifier.weight(1f))
@@ -226,12 +245,11 @@ internal fun LibraryCoverFlow(
 
 @Composable
 private fun CoverFlowItem(
-    item: LibraryItem,
+    coverData: Any?,
     isSelected: Boolean,
     pageOffset: () -> Float,
 ) {
     val shape = MaterialTheme.shapes.medium
-    val coverData = item.coverData()
     Column(
         modifier = Modifier.graphicsLayer {
             val offset = pageOffset().coerceIn(-4f, 4f)
@@ -293,6 +311,41 @@ private fun CoverFlowItem(
                     .graphicsLayer { scaleY = -1f },
             )
         }
+    }
+}
+
+@Composable
+private fun CoverFlowFolderDetails(folder: LibraryEntry.Folder) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = MaterialTheme.padding.extraLarge),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+        ) {
+            Icon(
+                imageVector = MaterialSymbols.RoundedFilled.Folder,
+                contentDescription = null,
+                modifier = Modifier.size(22.dp),
+            )
+            Text(
+                text = folder.folder.name,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Text(
+            text = stringResource(MR.strings.library_folder_entry_count, folder.items.size),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -363,15 +416,9 @@ private fun CoverFlowDetails(
     }
 }
 
-private fun LibraryItem.coverData(): MangaCoverModel {
-    val manga = libraryManga.manga
-    return MangaCoverModel(
-        mangaId = manga.id,
-        sourceId = manga.source,
-        isMangaFavorite = manga.favorite,
-        url = manga.thumbnailUrl,
-        lastModified = manga.coverLastModified,
-    )
+private fun LibraryEntry.coverData(): Any? = when (this) {
+    is LibraryEntry.Folder -> coverData
+    is LibraryEntry.Manga -> item.coverData()
 }
 
 private const val MAX_TILT = 52f

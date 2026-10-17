@@ -16,7 +16,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalLayoutDirection
 import eu.kanade.core.preference.PreferenceMutableState
-import eu.kanade.tachiyomi.ui.library.LibraryItem
+import eu.kanade.tachiyomi.ui.library.folder.LibraryEntry
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import tachiyomi.domain.category.model.Category
@@ -44,7 +44,9 @@ fun LibraryContent(
     getItemCountForCategory: (Category) -> Int?,
     getDisplayMode: (Int) -> PreferenceMutableState<LibraryDisplayMode>,
     getColumnsForOrientation: (Boolean) -> PreferenceMutableState<Int>,
-    getItemsForCategory: (Category) -> List<LibraryItem>,
+    getEntriesForCategory: (Category) -> List<LibraryEntry>,
+    onClickFolder: (LibraryEntry.Folder) -> Unit,
+    onLongClickFolder: (LibraryEntry.Folder) -> Unit,
 ) {
     Column(
         modifier = Modifier.padding(
@@ -99,7 +101,7 @@ fun LibraryContent(
                 getCategoryForPage = { page -> categories[page] },
                 getDisplayMode = getDisplayMode,
                 getColumnsForOrientation = getColumnsForOrientation,
-                getItemsForCategory = getItemsForCategory,
+                getEntriesForCategory = getEntriesForCategory,
                 onClickManga = { category, manga ->
                     if (selection.isNotEmpty()) {
                         onToggleSelection(category, manga)
@@ -108,6 +110,8 @@ fun LibraryContent(
                     }
                 },
                 onLongClickManga = onToggleRangeSelection,
+                onClickFolder = onClickFolder,
+                onLongClickFolder = onLongClickFolder,
                 onClickContinueReading = onContinueReadingClicked,
             )
         }

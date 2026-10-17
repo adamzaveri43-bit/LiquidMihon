@@ -17,6 +17,7 @@ import eu.kanade.core.util.fastFilterNot
 import eu.kanade.domain.base.BasePreferences
 import eu.kanade.domain.chapter.interactor.SetReadStatus
 import eu.kanade.domain.manga.interactor.UpdateManga
+import eu.kanade.domain.ui.UiPreferences
 import eu.kanade.presentation.library.components.LibraryToolbarTitle
 import eu.kanade.presentation.manga.DownloadAction
 import eu.kanade.tachiyomi.data.cache.CoverCache
@@ -25,6 +26,12 @@ import eu.kanade.tachiyomi.data.download.DownloadManager
 import eu.kanade.tachiyomi.data.track.TrackerManager
 import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.online.HttpSource
+import eu.kanade.tachiyomi.ui.library.folder.FolderCover
+import eu.kanade.tachiyomi.ui.library.folder.LibraryEntry
+import eu.kanade.tachiyomi.ui.library.folder.LibraryFolder
+import eu.kanade.tachiyomi.ui.library.folder.LibraryFolders
+import eu.kanade.tachiyomi.ui.library.folder.folderKey
+import eu.kanade.tachiyomi.ui.library.folder.mangaKey
 import eu.kanade.tachiyomi.util.chapter.getNextUnread
 import eu.kanade.tachiyomi.util.removeCovers
 import kotlinx.coroutines.CoroutineScope
@@ -56,6 +63,7 @@ import tachiyomi.core.common.util.lang.compareToWithCollator
 import tachiyomi.core.common.util.lang.pausedWhileUnsubscribed
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.category.interactor.SetMangaCategories
+import tachiyomi.domain.category.interactor.SetSortModeForCategory
 import tachiyomi.domain.category.model.Category
 import tachiyomi.domain.chapter.interactor.GetBookmarkedChaptersByMangaId
 import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
@@ -74,6 +82,7 @@ import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.domain.track.interactor.GetTracksPerManga
 import tachiyomi.domain.track.model.Track
 import tachiyomi.source.local.isLocal
+import java.io.File
 import kotlin.random.Random
 import kotlin.time.Duration.Companion.seconds
 
@@ -91,7 +100,9 @@ class LibraryViewModel(
     private val setReadStatus: SetReadStatus,
     private val updateManga: UpdateManga,
     private val setMangaCategories: SetMangaCategories,
+    private val setSortModeForCategory: SetSortModeForCategory,
     private val preferences: BasePreferences,
+    private val uiPreferences: UiPreferences,
     private val libraryPreferences: LibraryPreferences,
     private val coverCache: CoverCache,
     private val sourceManager: SourceManager,
@@ -109,6 +120,17 @@ class LibraryViewModel(
     private val dialog = MutableStateFlow<Dialog?>(null)
 
     private val activeCategoryIndex = MutableStateFlow(libraryPreferences.lastUsedCategory.get())
+
+    /** The folder being looked into, if any. */
+    private val openFolderId = MutableStateFlow<Long?>(null)
+
+    private val folders = uiPreferences.libraryFolders.changes()
+        .map(LibraryFolders::parse)
+        .flowOn(Dispatchers.Default)
+
+    private val customOrder = uiPreferences.libraryCustomOrder.changes()
+        .map(LibraryFolders::parseOrder)
+        .flowOn(Dispatchers.Default)
 
     private val displayPreferences = combine(
         libraryPreferences.categoryTabs.changes(),
@@ -149,9 +171,9 @@ class LibraryViewModel(
         searchQuery.debounce(0.25.seconds),
         getCategories.subscribe(),
         getFavoritesFlow(),
-        combine(tracks, getTrackingFiltersFlow(), ::Pair),
+        combine(tracks, getTrackingFiltersFlow(), customOrder, ::Triple),
         getLibraryItemPreferencesFlow(),
-    ) { searchQuery, categories, favorites, (tracksMap, trackingFilters), itemPreferences ->
+    ) { searchQuery, categories, favorites, (tracksMap, trackingFilters, customOrder), itemPreferences ->
         val showSystemCategory = favorites.any { it.libraryManga.categories.contains(0) }
         val filteredFavorites = favorites
             .applyFilters(tracksMap, trackingFilters, itemPreferences)
@@ -171,6 +193,7 @@ class LibraryViewModel(
             favorites = filteredFavorites,
             tracksMap = tracksMap,
             loggedInTrackerIds = trackingFilters.keys,
+            customOrder = customOrder,
         )
     }
         .distinctUntilChanged()
@@ -179,7 +202,7 @@ class LibraryViewModel(
                 data = data,
                 groupedFavorites = data.favorites
                     .applyGrouping(data.categories, data.showSystemCategory)
-                    .applySort(data.favoritesById, data.tracksMap, data.loggedInTrackerIds),
+                    .applySort(data.favoritesById, data.tracksMap, data.loggedInTrackerIds, data.customOrder),
             )
         }
         .flowOn(Dispatchers.Default)
@@ -189,7 +212,13 @@ class LibraryViewModel(
         library,
         combine(searchQuery, selection, dialog, ::Triple),
         combine(activeCategoryIndex, displayPreferences, hasActiveFilters, ::Triple),
-    ) { library, (searchQuery, selection, dialog), (activeCategoryIndex, display, hasActiveFilters) ->
+        combine(folders, openFolderId, ::Pair),
+    ) {
+            library,
+            (searchQuery, selection, dialog),
+            (activeCategoryIndex, display, hasActiveFilters),
+            (folders, openFolderId),
+        ->
         State(
             isLoading = library == null,
             searchQuery = searchQuery,
@@ -202,6 +231,8 @@ class LibraryViewModel(
             libraryData = library?.data ?: LibraryData(),
             activeCategoryIndex = activeCategoryIndex,
             groupedFavorites = library?.groupedFavorites.orEmpty(),
+            folders = folders,
+            openFolderId = openFolderId?.takeIf { id -> folders.any { it.id == id } },
         )
     }
         .stateIn(viewModelScope + subscriberGate, subscriberGate.whileSubscribed(5.seconds), State())
@@ -305,6 +336,7 @@ class LibraryViewModel(
         favoritesById: Map<Long, LibraryItem>,
         trackMap: Map<Long, List<Track>>,
         loggedInTrackerIds: Set<Long>,
+        customOrder: List<String>,
     ): Map<Category, List</* LibraryItem */ Long>> {
         // The collator already ignores case, and lowercasing on every comparison is slow on large libraries
         val sortAlphabetically: (LibraryItem, LibraryItem) -> Int = { manga1, manga2 ->
@@ -322,6 +354,12 @@ class LibraryViewModel(
                             .mapNotNull { trackerMap[it.trackerId]?.get10PointScore(it) }
                             .average()
                 }
+            }
+        }
+
+        val customPositions by lazy {
+            HashMap<String, Int>(customOrder.size).apply {
+                customOrder.forEachIndexed { index, key -> putIfAbsent(key, index) }
             }
         }
 
@@ -359,6 +397,12 @@ class LibraryViewModel(
                     val item1Score = trackerScores[manga1.id] ?: defaultTrackerScoreSortValue
                     val item2Score = trackerScores[manga2.id] ?: defaultTrackerScoreSortValue
                     item1Score.compareTo(item2Score)
+                }
+                LibrarySort.Type.Custom -> {
+                    // Entries not arranged yet go last
+                    val position1 = customPositions[mangaKey(manga1.id)] ?: Int.MAX_VALUE
+                    val position2 = customPositions[mangaKey(manga2.id)] ?: Int.MAX_VALUE
+                    position1.compareTo(position2)
                 }
                 LibrarySort.Type.Random -> {
                     error("Why Are We Still Here? Just To Suffer?")
@@ -659,7 +703,7 @@ class LibraryViewModel(
         val state = state.value
         selection.update { selection ->
             val newSelection = selection.mutate { list ->
-                val items = state.getItemsForCategoryId(category.id).fastMap { it.id }
+                val items = state.getVisibleItemsForCategoryId(category.id).fastMap { it.id }
                 val lastMangaIndex = lastSelection
                     ?.takeIf { it.categoryId == category.id && it.mangaId in list }
                     ?.let { items.indexOf(it.mangaId) }
@@ -686,7 +730,7 @@ class LibraryViewModel(
         val state = state.value
         selection.update { selection ->
             selection.mutate { list ->
-                state.getItemsForCategoryId(state.activeCategory?.id).map { it.id }.let(list::addAll)
+                state.getVisibleItemsForCategoryId(state.activeCategory?.id).map { it.id }.let(list::addAll)
             }
         }
     }
@@ -696,7 +740,7 @@ class LibraryViewModel(
         val state = state.value
         selection.update { selection ->
             selection.mutate { list ->
-                val itemIds = state.getItemsForCategoryId(state.activeCategory?.id).fastMap { it.id }
+                val itemIds = state.getVisibleItemsForCategoryId(state.activeCategory?.id).fastMap { it.id }
                 val (toRemove, toAdd) = itemIds.partition { it in list }
                 list.removeAll(toRemove)
                 list.addAll(toAdd)
@@ -709,6 +753,7 @@ class LibraryViewModel(
     }
 
     fun updateActiveCategoryIndex(index: Int) {
+        if (index != activeCategoryIndex.value) openFolderId.update { null }
         activeCategoryIndex.update { index }
         // Coerce here rather than reading it back off [state], which is derived asynchronously
         // and would still hold the previous index at this point.
@@ -748,6 +793,159 @@ class LibraryViewModel(
         dialog.update { null }
     }
 
+    fun openFolder(folderId: Long) {
+        openFolderId.update { folderId }
+    }
+
+    fun closeFolder() {
+        openFolderId.update { null }
+    }
+
+    fun openAddToFolderDialog() {
+        val mangaIds = selection.value.toList()
+        if (mangaIds.isEmpty()) return
+        val folderByMangaId = state.value.folderByMangaId
+        dialog.update { Dialog.AddToFolder(mangaIds, canRemove = mangaIds.any { it in folderByMangaId }) }
+    }
+
+    fun openFolderOptions(folderId: Long) {
+        dialog.update { Dialog.FolderOptions(folderId) }
+    }
+
+    fun openRenameFolderDialog(folderId: Long) {
+        dialog.update { Dialog.RenameFolder(folderId) }
+    }
+
+    fun openFolderCoverDialog(folderId: Long) {
+        dialog.update { Dialog.FolderCover(folderId) }
+    }
+
+    fun openDeleteFolderDialog(folderId: Long) {
+        dialog.update { Dialog.DeleteFolder(folderId) }
+    }
+
+    /** Arranges the open folder's contents, or else the current category's entries. */
+    fun openReorderDialog(folderId: Long? = state.value.openFolderId) {
+        val state = state.value
+        val category = state.activeCategory ?: return
+        val entries = if (folderId != null && folderId != state.openFolderId) {
+            val folder = state.folders.find { it.id == folderId } ?: return
+            val itemsById = state.getItemsForCategory(category).associateBy { it.id }
+            folder.mangaIds.mapNotNull { itemsById[it] }.map(LibraryEntry::Manga)
+        } else {
+            state.getEntriesForCategory(category)
+        }
+        dialog.update { Dialog.Reorder(category, entries, folderId) }
+    }
+
+    private fun updateFolders(transform: (List<LibraryFolder>) -> List<LibraryFolder>) {
+        val pref = uiPreferences.libraryFolders
+        pref.set(LibraryFolders.serialize(transform(LibraryFolders.parse(pref.get()))))
+    }
+
+    /** Puts [mangaIds] in a new folder named [name], where the first of them was in the custom order. */
+    fun createFolder(name: String, mangaIds: List<Long>) {
+        val id = System.currentTimeMillis()
+        updateFolders { folders ->
+            folders.withoutManga(mangaIds) + LibraryFolder(id = id, name = name.trim(), mangaIds = mangaIds)
+        }
+        val orderPref = uiPreferences.libraryCustomOrder
+        val order = LibraryFolders.parseOrder(orderPref.get())
+        if (order.isNotEmpty()) {
+            val memberKeys = mangaIds.map(::mangaKey).toSet()
+            val index = order.indexOfFirst { it in memberKeys }.takeIf { it >= 0 } ?: order.size
+            orderPref.set(LibraryFolders.serializeOrder(order.toMutableList().apply { add(index, folderKey(id)) }))
+        }
+        clearSelection()
+    }
+
+    fun addToFolder(folderId: Long, mangaIds: List<Long>) {
+        updateFolders { folders ->
+            val existing = folders.find { it.id == folderId }?.mangaIds.orEmpty()
+            val added = mangaIds.filter { it !in existing }
+            folders.withoutManga(added).map { folder ->
+                if (folder.id == folderId) folder.copy(mangaIds = folder.mangaIds + added) else folder
+            }
+        }
+        clearSelection()
+    }
+
+    fun removeFromFolder(mangaIds: List<Long>) {
+        updateFolders { folders ->
+            // A folder left empty has nothing to show anymore
+            val (remaining, emptied) = folders.withoutManga(mangaIds).partition { it.mangaIds.isNotEmpty() }
+            emptied.forEach { it.deleteCoverImage() }
+            remaining
+        }
+        clearSelection()
+    }
+
+    fun renameFolder(folderId: Long, name: String) {
+        updateFolders { folders -> folders.map { if (it.id == folderId) it.copy(name = name.trim()) else it } }
+    }
+
+    fun setFolderCover(folderId: Long, cover: FolderCover) {
+        updateFolders { folders ->
+            folders.map { folder ->
+                if (folder.id != folderId) return@map folder
+                if (folder.cover != cover) folder.deleteCoverImage()
+                folder.copy(cover = cover)
+            }
+        }
+    }
+
+    /** Deletes the folder, putting its entries back in the library. */
+    fun deleteFolder(folderId: Long) {
+        if (openFolderId.value == folderId) closeFolder()
+        updateFolders { folders ->
+            val (deleted, remaining) = folders.partition { it.id == folderId }
+            deleted.forEach { it.deleteCoverImage() }
+            remaining
+        }
+    }
+
+    /**
+     * Saves [keys], the entries of [category] (or of the folder [folderId]) in the order the user arranged them.
+     */
+    fun saveOrder(category: Category, folderId: Long?, keys: List<String>) {
+        if (folderId != null) {
+            val ids = keys.mapNotNull { it.removePrefix("m").toLongOrNull() }
+            updateFolders { folders ->
+                folders.map { folder ->
+                    if (folder.id != folderId) return@map folder
+                    // Entries hidden in this category keep their place after the arranged ones
+                    folder.copy(mangaIds = ids + folder.mangaIds.filter { it !in ids })
+                }
+            }
+            return
+        }
+        val orderPref = uiPreferences.libraryCustomOrder
+        val arranged = keys.toSet()
+        // Other categories only compare their own entries, so the rest can simply follow
+        orderPref.set(
+            LibraryFolders.serializeOrder(
+                keys + LibraryFolders.parseOrder(orderPref.get()).filter {
+                    it !in arranged
+                },
+            ),
+        )
+        if (category.sort.type != LibrarySort.Type.Custom) {
+            viewModelScope.launch {
+                setSortModeForCategory.await(category, LibrarySort.Type.Custom, LibrarySort.Direction.Ascending)
+            }
+        }
+    }
+
+    private fun List<LibraryFolder>.withoutManga(mangaIds: Collection<Long>): List<LibraryFolder> {
+        val ids = mangaIds.toSet()
+        return map { folder -> folder.copy(mangaIds = folder.mangaIds.filter { it !in ids }) }
+    }
+
+    private fun LibraryFolder.deleteCoverImage() {
+        val image = cover as? FolderCover.Image ?: return
+        appScope.launch(Dispatchers.IO) { File(image.path).delete() }
+    }
+
     sealed interface Dialog {
         data object SettingsSheet : Dialog
         data class ChangeCategory(
@@ -756,6 +954,20 @@ class LibraryViewModel(
         ) : Dialog
 
         data class DeleteManga(val manga: List<Manga>) : Dialog
+
+        /** Picking a folder to put the selected manga in. */
+        data class AddToFolder(val mangaIds: List<Long>, val canRemove: Boolean) : Dialog
+
+        data class FolderOptions(val folderId: Long) : Dialog
+
+        data class RenameFolder(val folderId: Long) : Dialog
+
+        data class FolderCover(val folderId: Long) : Dialog
+
+        data class DeleteFolder(val folderId: Long) : Dialog
+
+        /** Arranging a category's entries, or the open folder's, by hand. */
+        data class Reorder(val category: Category, val entries: List<LibraryEntry>, val folderId: Long?) : Dialog
     }
 
     @Immutable
@@ -783,6 +995,7 @@ class LibraryViewModel(
         val favorites: List<LibraryItem> = emptyList(),
         val tracksMap: Map</* Manga */ Long, List<Track>> = emptyMap(),
         val loggedInTrackerIds: Set<Long> = emptySet(),
+        val customOrder: List<String> = emptyList(),
     ) {
         val favoritesById by lazy { favorites.associateBy { it.id } }
     }
@@ -801,7 +1014,48 @@ class LibraryViewModel(
         val libraryData: LibraryData = LibraryData(),
         private val activeCategoryIndex: Int = 0,
         private val groupedFavorites: Map<Category, List</* LibraryItem */ Long>> = emptyMap(),
+        val folders: List<LibraryFolder> = emptyList(),
+        val openFolderId: Long? = null,
     ) {
+        val openFolder: LibraryFolder? = openFolderId?.let { id -> folders.find { it.id == id } }
+
+        /** Folder each manga is in. */
+        val folderByMangaId: Map<Long, LibraryFolder> by lazy {
+            buildMap { folders.forEach { folder -> folder.mangaIds.forEach { put(it, folder) } } }
+        }
+
+        private val entriesCache = HashMap<Long, List<LibraryEntry>>()
+
+        /**
+         * What a category's page shows: the open folder's contents, or its folders and the manga not in any.
+         * Searching looks through everything, so it shows matching manga without folders.
+         */
+        fun getEntriesForCategory(category: Category): List<LibraryEntry> = synchronized(entriesCache) {
+            entriesCache.getOrPut(category.id) {
+                val items = getItemsForCategory(category)
+                val folder = openFolder
+                when {
+                    !searchQuery.isNullOrEmpty() -> items.map(LibraryEntry::Manga)
+                    folder != null -> {
+                        val itemsById = items.associateBy { it.id }
+                        folder.mangaIds.mapNotNull { itemsById[it] }.map(LibraryEntry::Manga)
+                    }
+                    else -> LibraryFolders.group(
+                        items = items,
+                        folders = folders,
+                        customOrder = libraryData.customOrder.takeIf { category.sort.type == LibrarySort.Type.Custom },
+                        descending = !category.sort.isAscending,
+                    )
+                }
+            }
+        }
+
+        /** Manga shown on a category's page, outside of folders. */
+        fun getVisibleItemsForCategoryId(categoryId: Long?): List<LibraryItem> {
+            val category = displayedCategories.find { it.id == categoryId } ?: return emptyList()
+            return getEntriesForCategory(category).mapNotNull { (it as? LibraryEntry.Manga)?.item }
+        }
+
         val displayedCategories: List<Category> = groupedFavorites.keys.toList()
 
         val coercedActiveCategoryIndex = activeCategoryIndex.coerceIn(

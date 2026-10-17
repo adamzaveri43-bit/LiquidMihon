@@ -5,19 +5,21 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import eu.kanade.tachiyomi.ui.library.LibraryItem
+import eu.kanade.tachiyomi.ui.library.folder.LibraryEntry
 import tachiyomi.domain.library.model.LibraryManga
 import tachiyomi.domain.manga.model.MangaCover
 
 @Composable
 internal fun LibraryCompactGrid(
-    items: List<LibraryItem>,
+    entries: List<LibraryEntry>,
     showTitle: Boolean,
     columns: Int,
     contentPadding: PaddingValues,
     selection: Set<Long>,
     onClick: (LibraryManga) -> Unit,
     onLongClick: (LibraryManga) -> Unit,
+    onClickFolder: (LibraryEntry.Folder) -> Unit,
+    onLongClickFolder: (LibraryEntry.Folder) -> Unit,
     onClickContinueReading: ((LibraryManga) -> Unit)?,
     searchQuery: String?,
     onGlobalSearchClicked: () -> Unit,
@@ -30,40 +32,53 @@ internal fun LibraryCompactGrid(
         globalSearchItem(searchQuery, onGlobalSearchClicked)
 
         items(
-            items = items,
-            key = { it.libraryManga.id },
-            contentType = { "library_compact_grid_item" },
-        ) { libraryItem ->
-            val manga = libraryItem.libraryManga.manga
+            items = entries,
+            key = { it.key },
+            contentType = { if (it is LibraryEntry.Folder) "library_folder_item" else "library_compact_grid_item" },
+        ) { entry ->
             AnimatedLibraryItem(modifier = Modifier.animateItem()) {
-                MangaCompactGridItem(
-                    isSelected = manga.id in selection,
-                    title = manga.title.takeIf { showTitle },
-                    coverData = MangaCover(
-                        mangaId = manga.id,
-                        sourceId = manga.source,
-                        isMangaFavorite = manga.favorite,
-                        url = manga.thumbnailUrl,
-                        lastModified = manga.coverLastModified,
-                    ),
-                    coverBadgeStart = {
-                        DownloadsBadge(count = libraryItem.badges.downloadCount)
-                        UnreadBadge(count = libraryItem.badges.unreadCount)
-                    },
-                    coverBadgeEnd = {
-                        LanguageBadge(
-                            isLocal = libraryItem.badges.isLocal,
-                            sourceLanguage = libraryItem.badges.sourceLanguage,
+                when (entry) {
+                    is LibraryEntry.Folder -> FolderCompactGridItem(
+                        folder = entry,
+                        showTitle = showTitle,
+                        onClick = { onClickFolder(entry) },
+                        onLongClick = { onLongClickFolder(entry) },
+                    )
+                    is LibraryEntry.Manga -> {
+                        val libraryItem = entry.item
+                        val manga = libraryItem.libraryManga.manga
+                        MangaCompactGridItem(
+                            isSelected = manga.id in selection,
+                            title = manga.title.takeIf { showTitle },
+                            coverData = MangaCover(
+                                mangaId = manga.id,
+                                sourceId = manga.source,
+                                isMangaFavorite = manga.favorite,
+                                url = manga.thumbnailUrl,
+                                lastModified = manga.coverLastModified,
+                            ),
+                            coverBadgeStart = {
+                                DownloadsBadge(count = libraryItem.badges.downloadCount)
+                                UnreadBadge(count = libraryItem.badges.unreadCount)
+                            },
+                            coverBadgeEnd = {
+                                LanguageBadge(
+                                    isLocal = libraryItem.badges.isLocal,
+                                    sourceLanguage = libraryItem.badges.sourceLanguage,
+                                )
+                            },
+                            onLongClick = { onLongClick(libraryItem.libraryManga) },
+                            onClick = { onClick(libraryItem.libraryManga) },
+                            onClickContinueReading = if (onClickContinueReading != null &&
+                                libraryItem.unreadCount > 0
+                            ) {
+                                { onClickContinueReading(libraryItem.libraryManga) }
+                            } else {
+                                null
+                            },
                         )
-                    },
-                    onLongClick = { onLongClick(libraryItem.libraryManga) },
-                    onClick = { onClick(libraryItem.libraryManga) },
-                    onClickContinueReading = if (onClickContinueReading != null && libraryItem.unreadCount > 0) {
-                        { onClickContinueReading(libraryItem.libraryManga) }
-                    } else {
-                        null
-                    },
-                )
+                    }
+                }
             }
         }
     }

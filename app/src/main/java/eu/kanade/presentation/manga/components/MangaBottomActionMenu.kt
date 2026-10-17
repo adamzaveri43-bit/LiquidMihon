@@ -62,6 +62,7 @@ import mihon.icons.materialsymbols.rounded.BookmarkRemove
 import mihon.icons.materialsymbols.rounded.Delete
 import mihon.icons.materialsymbols.rounded.DoneAll
 import mihon.icons.materialsymbols.rounded.Download
+import mihon.icons.materialsymbols.rounded.Folder
 import mihon.icons.materialsymbols.rounded.MoreVert
 import mihon.icons.materialsymbols.rounded.RemoveDone
 import mihon.icons.materialsymbols.rounded.SwapCalls
@@ -241,6 +242,7 @@ fun LibraryBottomActionMenu(
     onDownloadClicked: ((DownloadAction) -> Unit)?,
     onDeleteClicked: () -> Unit,
     onMigrateClicked: () -> Unit,
+    onFolderClicked: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     AnimatedVisibility(
@@ -251,7 +253,7 @@ fun LibraryBottomActionMenu(
         val scope = rememberCoroutineScope()
         ActionMenuSurface(modifier = modifier) {
             val haptic = LocalHapticFeedback.current
-            val confirm = remember { mutableStateListOf(false, false, false, false, false, false) }
+            val confirm = remember { mutableStateListOf(false, false, false, false, false, false, false) }
             var resetJob by remember { mutableStateOf<Job?>(null) }
             val onLongClickItem: (Int) -> Unit = { toConfirmIndex ->
                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -291,6 +293,13 @@ fun LibraryBottomActionMenu(
                     toConfirm = confirm[2],
                     onLongClick = { onLongClickItem(2) },
                     onClick = onMarkAsUnreadClicked,
+                )
+                Button(
+                    title = stringResource(MR.strings.library_folder),
+                    icon = MaterialSymbols.Rounded.Folder,
+                    toConfirm = confirm[6],
+                    onLongClick = { onLongClickItem(6) },
+                    onClick = onFolderClicked,
                 )
                 if (onDownloadClicked != null) {
                     var downloadExpanded by remember { mutableStateOf(false) }
