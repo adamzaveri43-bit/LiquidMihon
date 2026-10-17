@@ -66,6 +66,9 @@ object LiquidGlassNavigationBarDefaults {
 
 private val IndicatorInset = 4.dp
 
+// Settles in about a third of a second, the trailing edge catching up a moment later
+private const val INDICATOR_LEADING_STIFFNESS = 2500f
+
 /**
  * Floating capsule navigation bar made of liquid glass. The selection is a glass droplet that stretches
  * towards the newly selected item before settling.
@@ -94,12 +97,12 @@ fun LiquidGlassNavigationBar(
         // Leading edge moves quickly, trailing edge follows lazily: the gap between them is the "stretch"
         val leading by animateDpAsState(
             targetValue = target,
-            animationSpec = spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMedium),
+            animationSpec = spring(dampingRatio = 0.75f, stiffness = INDICATOR_LEADING_STIFFNESS),
             label = "indicatorLeading",
         )
         val trailing by animateDpAsState(
             targetValue = target,
-            animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow),
+            animationSpec = spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMedium),
             label = "indicatorTrailing",
         )
         val start = minOf(leading, trailing)

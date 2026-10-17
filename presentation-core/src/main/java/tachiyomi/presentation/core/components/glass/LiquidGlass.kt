@@ -302,7 +302,8 @@ private class BackdropNode(
         }
         val radius = blurRadius.toPx()
         val corner = if (cornerRadius == Dp.Unspecified) size.minDimension / 2 else cornerRadius.toPx()
-        val key = GlassEffectKey(radius, corner, size, lens)
+        // A plain blur doesn't depend on the size, so bars that resize (like an extended FAB) keep their effect
+        val key = GlassEffectKey(radius, corner, if (lens) size else Size.Zero, lens)
         if (key != effectKey) {
             layer.renderEffect = GlassEffectCache.get(key, density)
             effectKey = key
@@ -322,10 +323,19 @@ private class BackdropNode(
 private data class GlassEffectKey(val radius: Float, val corner: Float, val size: Size, val lens: Boolean)
 
 /**
- * Effects are shared between glass surfaces of the same size, so a new screen doesn't have to build (and compile
- * the lens shader for) its bars again.
+ * Effects are shared between glass surfaces of the same size, so a new screen doesn't have to build its bars
+ * again.
  */
 private object GlassEffectCache {
+    // Compiling the shader is the slow part and its uniforms are copied into each effect, so one is enough.
+    // Typed as Any so this class still loads where RuntimeShader doesn't exist
+    private var lensShader: Any? = null
+
+    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
+    fun lensShader(): RuntimeShader = (lensShader as RuntimeShader?) ?: RuntimeShader(LENS_SHADER).also {
+        lensShader = it
+    }
+
     private val effects = object : LinkedHashMap<GlassEffectKey, RenderEffect>(16, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<GlassEffectKey, RenderEffect>) = size > 32
     }
@@ -357,7 +367,7 @@ private fun createGlassRenderEffect(radius: Float, lensSize: Size?, cornerRadius
 
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 private fun createLensEffect(size: Size, cornerRadius: Float, density: Float): android.graphics.RenderEffect {
-    val shader = RuntimeShader(LENS_SHADER)
+    val shader = GlassEffectCache.lensShader()
     val band = minOf(size.minDimension * 0.42f, 22f * density)
     shader.setFloatUniform("size", size.width, size.height)
     shader.setFloatUniform("radius", cornerRadius.coerceAtMost(size.minDimension / 2))

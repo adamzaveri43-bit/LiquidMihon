@@ -2,6 +2,7 @@ package eu.kanade.presentation.library.components
 
 import android.content.Context
 import android.os.Build
+import android.os.SystemClock
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
@@ -45,6 +46,7 @@ import coil3.request.allowHardware
 import coil3.toBitmap
 import eu.kanade.domain.ui.model.LibraryBackground
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.io.File
 import kotlin.math.PI
@@ -154,7 +156,7 @@ private fun CustomImageBackground(imagePath: String, animate: Boolean, blur: Int
             }
             .build()
     }
-    val time = rememberAnimationTime(animate)
+    val time = rememberAnimationTime(animate, AMBIENT_FPS)
     AsyncImage(
         model = File(imagePath),
         imageLoader = imageLoader,
@@ -180,7 +182,7 @@ private fun GradientBackground(
     animate: Boolean,
     blobAlpha: Float,
 ) {
-    val time = rememberAnimationTime(animate)
+    val time = rememberAnimationTime(animate, AMBIENT_FPS)
     Canvas(modifier = Modifier.fillMaxSize()) {
         val t = time.value
         blobs.forEachIndexed { index, blob ->
@@ -208,7 +210,8 @@ private fun GradientBackground(
  */
 @Composable
 private fun AeroBackground(animate: Boolean, isDark: Boolean) {
-    val time = rememberAnimationTime(animate)
+    // The bubbles have crisp edges, so they need more frames than the soft gradients to move smoothly
+    val time = rememberAnimationTime(animate, AERO_FPS)
     Canvas(modifier = Modifier.fillMaxSize()) {
         val t = time.value
         val sky = if (isDark) {
@@ -294,24 +297,32 @@ private val aeroBubbles = List(14) { index ->
 }
 
 /**
- * Seconds since this was first shown, advancing every frame while [animate] is set.
+ * Seconds since this was first shown, advancing up to [fps] times a second while [animate] is set.
  *
- * Driven by the frame clock directly so it keeps moving even when system animations are turned down.
+ * Driven by the frame clock directly so it keeps moving even when system animations are turned down. The
+ * background drifts slowly and covers the whole screen (and everything glass refracts it), so redrawing it at
+ * the display's full refresh rate would only take GPU time away from scrolling and the other animations.
  */
 @Composable
-private fun rememberAnimationTime(animate: Boolean): State<Float> {
+private fun rememberAnimationTime(animate: Boolean, fps: Int): State<Float> {
     val time = remember { mutableFloatStateOf(0f) }
     if (animate) {
-        LaunchedEffect(Unit) {
+        LaunchedEffect(fps) {
             val offset = time.floatValue
             val start = withFrameNanos { it }
+            val frameMillis = 1000L / fps
             while (true) {
+                // Sleeping instead of skipping frames lets the display drop to a lower refresh rate meanwhile
+                delay(frameMillis)
                 withFrameNanos { time.floatValue = offset + (it - start) / 1_000_000_000f }
             }
         }
     }
     return time
 }
+
+private const val AMBIENT_FPS = 30
+private const val AERO_FPS = 60
 
 @Immutable
 private data class Blob(val color: Color, val x: Float, val y: Float, val radius: Float)
@@ -429,20 +440,35 @@ suspend fun extractCoverColors(context: Context, cover: Any): List<Color>? {
 }
 
 /**
- * Library item that springs into place the first time it's shown, when animations are enabled.
+ * When the library page currently being shown appeared, in [SystemClock.uptimeMillis] time. Null when there's
+ * no page to animate in.
+ */
+val LocalLibraryEntranceStart = staticCompositionLocalOf<Long?> { null }
+
+/**
+ * Library item that springs into place when the page first appears, when animations are enabled.
+ *
+ * Only items shown as part of the page appearing animate: items scrolled into view later show up right away,
+ * otherwise every new row would pop in while scrolling.
  */
 @Composable
 internal fun AnimatedLibraryItem(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
-    val enabled = LocalLibraryStyle.current.animations
+    val entranceStart = LocalLibraryEntranceStart.current
+    val style = LocalLibraryStyle.current
+    val enabled = remember {
+        style.animations &&
+            entranceStart != null &&
+            SystemClock.uptimeMillis() - entranceStart < ENTRANCE_WINDOW_MILLIS
+    }
     val progress = remember { Animatable(if (enabled) 0f else 1f) }
     if (enabled) {
         LaunchedEffect(Unit) {
             progress.animateTo(
                 targetValue = 1f,
-                animationSpec = spring(dampingRatio = 0.7f, stiffness = Spring.StiffnessMediumLow),
+                animationSpec = spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMedium),
             )
         }
     }
@@ -450,12 +476,14 @@ internal fun AnimatedLibraryItem(
         modifier = modifier.graphicsLayer {
             val p = progress.value
             alpha = p.coerceIn(0f, 1f)
-            val scale = 0.86f + 0.14f * p
+            val scale = 0.92f + 0.08f * p
             scaleX = scale
             scaleY = scale
-            translationY = (1f - p) * 28.dp.toPx()
+            translationY = (1f - p) * 16.dp.toPx()
         },
     ) {
         content()
     }
 }
+
+private const val ENTRANCE_WINDOW_MILLIS = 400L

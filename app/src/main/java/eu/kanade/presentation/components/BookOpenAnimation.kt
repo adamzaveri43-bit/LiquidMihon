@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.lerp
 import androidx.compose.ui.unit.min
 import androidx.compose.ui.util.lerp
 import eu.kanade.presentation.manga.components.MangaCover
+import eu.kanade.tachiyomi.R
 import kotlinx.coroutines.delay
 import mihon.app.di.appGraph
 import tachiyomi.presentation.core.util.collectAsState
@@ -88,8 +89,8 @@ fun BookOpenAnimationHost(content: @Composable () -> Unit) {
                         // The reader fades in over the open page
                         val options = ActivityOptions.makeCustomAnimation(
                             context,
-                            android.R.anim.fade_in,
-                            android.R.anim.fade_out,
+                            R.anim.reader_fade_in,
+                            R.anim.reader_fade_out,
                         )
                         context.startActivity(request.intent, options.toBundle())
                     },
@@ -109,9 +110,9 @@ private fun BookOpenOverlay(
     val appear = remember { Animatable(0f) }
     val open = remember { Animatable(0f) }
     LaunchedEffect(request) {
-        appear.animateTo(1f, tween(durationMillis = 380, easing = FastOutSlowInEasing))
-        delay(140)
-        open.animateTo(1f, tween(durationMillis = 720, easing = FastOutSlowInEasing))
+        appear.animateTo(1f, tween(durationMillis = 240, easing = FastOutSlowInEasing))
+        delay(40)
+        open.animateTo(1f, tween(durationMillis = 480, easing = FastOutSlowInEasing))
         onOpened()
         // Stay over the app until the reader has covered it
         delay(800)

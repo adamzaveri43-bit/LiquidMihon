@@ -1,6 +1,7 @@
 package eu.kanade.presentation.library.components
 
 import android.content.res.Configuration
+import android.os.SystemClock
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -11,9 +12,11 @@ import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
@@ -78,57 +81,61 @@ fun LibraryPager(
         val onClickManga: (LibraryManga) -> Unit = { onClickManga(category, it) }
         val onLongClickManga: (LibraryManga) -> Unit = { onLongClickManga(category, it) }
 
-        when (displayMode) {
-            LibraryDisplayMode.List -> {
-                LibraryList(
-                    items = items,
-                    contentPadding = contentPadding,
-                    selection = selection,
-                    onClick = onClickManga,
-                    onLongClick = onLongClickManga,
-                    onClickContinueReading = onClickContinueReading,
-                    searchQuery = searchQuery,
-                    onGlobalSearchClicked = onGlobalSearchClicked,
-                )
-            }
-            LibraryDisplayMode.CompactGrid, LibraryDisplayMode.CoverOnlyGrid -> {
-                LibraryCompactGrid(
-                    items = items,
-                    showTitle = displayMode is LibraryDisplayMode.CompactGrid,
-                    columns = columns,
-                    contentPadding = contentPadding,
-                    selection = selection,
-                    onClick = onClickManga,
-                    onLongClick = onLongClickManga,
-                    onClickContinueReading = onClickContinueReading,
-                    searchQuery = searchQuery,
-                    onGlobalSearchClicked = onGlobalSearchClicked,
-                )
-            }
-            LibraryDisplayMode.CoverFlow -> {
-                LibraryCoverFlow(
-                    items = items,
-                    contentPadding = contentPadding,
-                    selection = selection,
-                    onClick = onClickManga,
-                    onLongClick = onLongClickManga,
-                    onClickContinueReading = onClickContinueReading,
-                    searchQuery = searchQuery,
-                    onGlobalSearchClicked = onGlobalSearchClicked,
-                )
-            }
-            LibraryDisplayMode.ComfortableGrid -> {
-                LibraryComfortableGrid(
-                    items = items,
-                    columns = columns,
-                    contentPadding = contentPadding,
-                    selection = selection,
-                    onClick = onClickManga,
-                    onLongClick = onLongClickManga,
-                    onClickContinueReading = onClickContinueReading,
-                    searchQuery = searchQuery,
-                    onGlobalSearchClicked = onGlobalSearchClicked,
-                )
+        // Saved so coming back to the library doesn't play the entrance again
+        val entranceStart = rememberSaveable { SystemClock.uptimeMillis() }
+        CompositionLocalProvider(LocalLibraryEntranceStart provides entranceStart) {
+            when (displayMode) {
+                LibraryDisplayMode.List -> {
+                    LibraryList(
+                        items = items,
+                        contentPadding = contentPadding,
+                        selection = selection,
+                        onClick = onClickManga,
+                        onLongClick = onLongClickManga,
+                        onClickContinueReading = onClickContinueReading,
+                        searchQuery = searchQuery,
+                        onGlobalSearchClicked = onGlobalSearchClicked,
+                    )
+                }
+                LibraryDisplayMode.CompactGrid, LibraryDisplayMode.CoverOnlyGrid -> {
+                    LibraryCompactGrid(
+                        items = items,
+                        showTitle = displayMode is LibraryDisplayMode.CompactGrid,
+                        columns = columns,
+                        contentPadding = contentPadding,
+                        selection = selection,
+                        onClick = onClickManga,
+                        onLongClick = onLongClickManga,
+                        onClickContinueReading = onClickContinueReading,
+                        searchQuery = searchQuery,
+                        onGlobalSearchClicked = onGlobalSearchClicked,
+                    )
+                }
+                LibraryDisplayMode.CoverFlow -> {
+                    LibraryCoverFlow(
+                        items = items,
+                        contentPadding = contentPadding,
+                        selection = selection,
+                        onClick = onClickManga,
+                        onLongClick = onLongClickManga,
+                        onClickContinueReading = onClickContinueReading,
+                        searchQuery = searchQuery,
+                        onGlobalSearchClicked = onGlobalSearchClicked,
+                    )
+                }
+                LibraryDisplayMode.ComfortableGrid -> {
+                    LibraryComfortableGrid(
+                        items = items,
+                        columns = columns,
+                        contentPadding = contentPadding,
+                        selection = selection,
+                        onClick = onClickManga,
+                        onLongClick = onLongClickManga,
+                        onClickContinueReading = onClickContinueReading,
+                        searchQuery = searchQuery,
+                        onGlobalSearchClicked = onGlobalSearchClicked,
+                    )
+                }
             }
         }
     }
