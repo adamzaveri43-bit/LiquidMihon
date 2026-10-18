@@ -28,12 +28,16 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import coil3.ImageLoader
 import coil3.compose.AsyncImage
@@ -183,7 +187,7 @@ private fun GradientBackground(
     blobAlpha: Float,
 ) {
     val time = rememberAnimationTime(animate, AMBIENT_FPS)
-    Canvas(modifier = Modifier.fillMaxSize()) {
+    Canvas(modifier = Modifier.fillMaxSize().downsampled(GRADIENT_DOWNSAMPLE)) {
         val t = time.value
         blobs.forEachIndexed { index, blob ->
             // Each blob orbits its anchor at its own pace and breathes, so the mesh keeps morphing
@@ -321,6 +325,32 @@ private fun rememberAnimationTime(animate: Boolean, fps: Int): State<Float> {
     return time
 }
 
+/**
+ * Draws the content at 1/[factor] of its size into its own layer and scales that up to fill the space.
+ *
+ * For content without hard edges, like soft gradients, this looks the same at a fraction of the drawing cost.
+ */
+private fun Modifier.downsampled(factor: Int): Modifier = layout { measurable, constraints ->
+    val width = constraints.maxWidth
+    val height = constraints.maxHeight
+    val placeable = measurable.measure(
+        Constraints.fixed(
+            width = ((width + factor - 1) / factor).coerceAtLeast(1),
+            height = ((height + factor - 1) / factor).coerceAtLeast(1),
+        ),
+    )
+    layout(width, height) {
+        placeable.placeWithLayer(0, 0) {
+            transformOrigin = TransformOrigin(0f, 0f)
+            scaleX = width.toFloat() / placeable.width
+            scaleY = height.toFloat() / placeable.height
+            // Rendered into a buffer of the small size, which is what makes it cheaper
+            compositingStrategy = CompositingStrategy.Offscreen
+        }
+    }
+}
+
+private const val GRADIENT_DOWNSAMPLE = 4
 private const val AMBIENT_FPS = 30
 private const val AERO_FPS = 60
 

@@ -34,6 +34,7 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.asComposeRenderEffect
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.layer.GraphicsLayer
 import androidx.compose.ui.graphics.layer.drawLayer
@@ -49,7 +50,10 @@ import androidx.compose.ui.node.invalidateDraw
 import androidx.compose.ui.node.requireGraphicsContext
 import androidx.compose.ui.node.requireLayoutCoordinates
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.toSize
+import kotlin.math.ceil
 
 /**
  * Whether the Liquid Glass look is active, i.e. chrome should be drawn as translucent glass instead of opaque
@@ -300,25 +304,38 @@ private class BackdropNode(
             drawContent()
             return
         }
-        val radius = blurRadius.toPx()
-        val corner = if (cornerRadius == Dp.Unspecified) size.minDimension / 2 else cornerRadius.toPx()
+        // The backdrop ends up blurred anyway, so it's blurred at a fraction of the resolution and scaled back up:
+        // it looks the same, but the GPU has far fewer pixels to blur on every frame the content moves
+        val lowSize = IntSize(
+            width = ceil(size.width / DOWNSAMPLE).toInt().coerceAtLeast(1),
+            height = ceil(size.height / DOWNSAMPLE).toInt().coerceAtLeast(1),
+        )
+        val radius = blurRadius.toPx() / DOWNSAMPLE
+        val corner = (if (cornerRadius == Dp.Unspecified) size.minDimension / 2 else cornerRadius.toPx()) / DOWNSAMPLE
         // A plain blur doesn't depend on the size, so bars that resize (like an extended FAB) keep their effect
-        val key = GlassEffectKey(radius, corner, if (lens) size else Size.Zero, lens)
+        val key = GlassEffectKey(radius, corner, if (lens) lowSize.toSize() else Size.Zero, lens)
         if (key != effectKey) {
-            layer.renderEffect = GlassEffectCache.get(key, density)
+            layer.renderEffect = GlassEffectCache.get(key, density / DOWNSAMPLE)
             effectKey = key
         }
         // Resolved at draw time so it's right on the very first frame and during transitions
         val offset = self.localPositionOf(source, Offset.Zero)
-        layer.record {
-            translate(offset.x, offset.y) {
-                drawLayer(backdrop.layer)
+        layer.record(size = lowSize) {
+            scale(1f / DOWNSAMPLE, pivot = Offset.Zero) {
+                translate(offset.x, offset.y) {
+                    drawLayer(backdrop.layer)
+                }
             }
         }
-        drawLayer(layer)
+        scale(DOWNSAMPLE, pivot = Offset.Zero) {
+            drawLayer(layer)
+        }
         drawContent()
     }
 }
+
+/** How much smaller than the glass its blurred backdrop is rendered. */
+private const val DOWNSAMPLE = 3f
 
 private data class GlassEffectKey(val radius: Float, val corner: Float, val size: Size, val lens: Boolean)
 
@@ -397,6 +414,10 @@ half4 main(float2 coord) {
     float2 p = coord - halfSize;
     float d = sdRoundRect(p, halfSize, radius);
     float t = clamp(1.0 + d / band, 0.0, 1.0);
+    // Away from the rim nothing bends, so most of the glass is a single sample
+    if (t <= 0.0) {
+        return content.eval(coord);
+    }
     t = t * t * t;
     float2 e = float2(1.0, 0.0);
     float2 n = float2(

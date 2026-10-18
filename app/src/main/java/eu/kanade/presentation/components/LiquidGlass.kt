@@ -16,13 +16,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.BadgedBox
@@ -45,9 +43,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import tachiyomi.presentation.core.components.glass.LiquidGlassBackdrop
 import tachiyomi.presentation.core.components.glass.LiquidGlassDefaults
@@ -95,24 +96,31 @@ fun LiquidGlassNavigationBar(
         val itemWidth = (maxWidth - IndicatorInset * 2) / itemCount.coerceAtLeast(1)
         val target = itemWidth * selectedIndex
         // Leading edge moves quickly, trailing edge follows lazily: the gap between them is the "stretch"
-        val leading by animateDpAsState(
+        val leading = animateDpAsState(
             targetValue = target,
             animationSpec = spring(dampingRatio = 0.75f, stiffness = INDICATOR_LEADING_STIFFNESS),
             label = "indicatorLeading",
         )
-        val trailing by animateDpAsState(
+        val trailing = animateDpAsState(
             targetValue = target,
             animationSpec = spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMedium),
             label = "indicatorTrailing",
         )
-        val start = minOf(leading, trailing)
-        val end = maxOf(leading, trailing) + itemWidth
         val primary = MaterialTheme.colorScheme.primary
         Box(
             modifier = Modifier
-                .offset(x = IndicatorInset + start, y = IndicatorInset)
-                .width(end - start)
-                .fillMaxHeight()
+                // Read while placing rather than composing, so the animation doesn't rebuild the whole bar
+                .offset {
+                    val start = minOf(leading.value, trailing.value)
+                    IntOffset((IndicatorInset + start).roundToPx(), IndicatorInset.roundToPx())
+                }
+                .layout { measurable, constraints ->
+                    val start = minOf(leading.value, trailing.value)
+                    val end = maxOf(leading.value, trailing.value) + itemWidth
+                    val width = (end - start).roundToPx().coerceAtLeast(0)
+                    val placeable = measurable.measure(Constraints.fixed(width, constraints.maxHeight))
+                    layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+                }
                 .padding(bottom = IndicatorInset * 2)
                 .liquidGlass(
                     shape = CircleShape,
