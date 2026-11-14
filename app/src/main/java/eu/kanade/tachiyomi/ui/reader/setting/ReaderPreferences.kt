@@ -162,6 +162,23 @@ class ReaderPreferences(
 
     // endregion
 
+    // region Books
+
+    /** Text size of epub books, in sp. */
+    val bookTextSize: Preference<Int> = preferenceStore.getInt("pref_book_text_size", 18)
+
+    /** Line height of epub books, in percent of the text size. */
+    val bookLineSpacing: Preference<Int> = preferenceStore.getInt("pref_book_line_spacing", 150)
+
+    /** Side margins of epub books, in percent of the page width. */
+    val bookMargins: Preference<Int> = preferenceStore.getInt("pref_book_margins", 7)
+
+    val bookFont: Preference<BookFont> = preferenceStore.getEnum("pref_book_font", BookFont.SERIF)
+
+    val bookJustify: Preference<Boolean> = preferenceStore.getBoolean("pref_book_justify", true)
+
+    // endregion
+
     // region Controls
 
     val readWithLongTap: Preference<Boolean> = preferenceStore.getBoolean("reader_long_tap", true)
@@ -214,6 +231,12 @@ class ReaderPreferences(
         HORIZONTAL(MR.strings.tapping_inverted_horizontal, shouldInvertHorizontal = true),
         VERTICAL(MR.strings.tapping_inverted_vertical, shouldInvertVertical = true),
         BOTH(MR.strings.tapping_inverted_both, shouldInvertHorizontal = true, shouldInvertVertical = true),
+    }
+
+    enum class BookFont(val titleRes: StringResource) {
+        SERIF(MR.strings.book_font_serif),
+        SANS_SERIF(MR.strings.book_font_sans_serif),
+        MONOSPACE(MR.strings.book_font_monospace),
     }
 
     enum class ReaderHideThreshold(val threshold: Int) {

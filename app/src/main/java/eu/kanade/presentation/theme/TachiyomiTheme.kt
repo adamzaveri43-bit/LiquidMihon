@@ -43,8 +43,12 @@ import eu.kanade.presentation.theme.colorscheme.YinYangColorScheme
 import eu.kanade.presentation.theme.colorscheme.YotsubaColorScheme
 import eu.kanade.tachiyomi.R
 import mihon.app.di.appGraph
+import tachiyomi.presentation.core.components.glass.DEFAULT_GLASS_TRANSPARENCY
 import tachiyomi.presentation.core.components.glass.LocalGlassAero
+import tachiyomi.presentation.core.components.glass.LocalGlassTransparency
 import tachiyomi.presentation.core.components.glass.LocalLiquidGlass
+import tachiyomi.presentation.core.components.glass.glassAlpha
+import tachiyomi.presentation.core.util.collectAsState
 
 @Composable
 fun TachiyomiTheme(
@@ -58,6 +62,8 @@ fun TachiyomiTheme(
         appTheme = appTheme ?: uiPreferences.appTheme.get(),
         isAmoled = amoled ?: uiPreferences.themeDarkAmoled.get(),
         glassStyle = remember { uiPreferences.glassStyle.get() },
+        // Read live so the transparency slider previews right away
+        glassTransparency = remember { uiPreferences.glassTransparency }.collectAsState().value / 100f,
         // Theme previews show the theme's own colors
         accentColor = if (appTheme == null) remember { uiPreferences.accentColor.get() } else 0,
         font = remember { uiPreferences.appFont.get() },
@@ -74,6 +80,7 @@ fun TachiyomiPreviewTheme(
     appTheme = appTheme,
     isAmoled = isAmoled,
     glassStyle = GlassStyle.OFF,
+    glassTransparency = DEFAULT_GLASS_TRANSPARENCY,
     accentColor = 0,
     font = AppFont.DEFAULT,
     content = content,
@@ -84,6 +91,7 @@ private fun BaseTachiyomiTheme(
     appTheme: AppTheme,
     isAmoled: Boolean,
     glassStyle: GlassStyle,
+    glassTransparency: Float,
     accentColor: Int,
     font: AppFont,
     content: @Composable () -> Unit,
@@ -92,7 +100,7 @@ private fun BaseTachiyomiTheme(
     val isDark = isSystemInDarkTheme()
     val isGlass = glassStyle != GlassStyle.OFF
     MaterialExpressiveTheme(
-        colorScheme = remember(appTheme, isDark, isAmoled, accentColor, isGlass) {
+        colorScheme = remember(appTheme, isDark, isAmoled, accentColor, isGlass, glassTransparency) {
             getThemeColorScheme(
                 context = context,
                 appTheme = appTheme,
@@ -103,9 +111,11 @@ private fun BaseTachiyomiTheme(
                 .let { scheme ->
                     // Dialogs and sheets sit on a frosted window, let it show through
                     if (isGlass) {
+                        // Kept fairly dense whatever the transparency so dialog text stays readable
+                        val alpha = glassAlpha(0.9f, glassTransparency).coerceIn(0.6f, 1f)
                         scheme.copy(
                             surfaceContainerHigh = scheme.surfaceContainerHigh.copy(
-                                alpha = minOf(scheme.surfaceContainerHigh.alpha, 0.9f),
+                                alpha = minOf(scheme.surfaceContainerHigh.alpha, alpha),
                             ),
                         )
                     } else {
@@ -119,6 +129,7 @@ private fun BaseTachiyomiTheme(
         CompositionLocalProvider(
             LocalLiquidGlass provides isGlass,
             LocalGlassAero provides (glassStyle == GlassStyle.FRUTIGER_AERO),
+            LocalGlassTransparency provides glassTransparency,
             content = content,
         )
     }

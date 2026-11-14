@@ -69,6 +69,8 @@ object SettingsAppearanceScreen : SearchableSettings {
         val amoledPref = uiPreferences.themeDarkAmoled
         val amoled by amoledPref.collectAsState()
 
+        val glassStyle by uiPreferences.glassStyle.collectAsState()
+
         return Preference.PreferenceGroup(
             title = stringResource(MR.strings.pref_category_theme),
             preferenceItems = listOf(
@@ -118,6 +120,15 @@ object SettingsAppearanceScreen : SearchableSettings {
                         (context as? Activity)?.let { ActivityCompat.recreate(it) }
                         true
                     },
+                ),
+                Preference.PreferenceItem.SliderPreference(
+                    preference = uiPreferences.glassTransparency,
+                    valueRange = 0..100,
+                    steps = 19,
+                    title = stringResource(MR.strings.pref_glass_transparency),
+                    subtitle = stringResource(MR.strings.pref_glass_transparency_summary),
+                    valueText = { "$it%" },
+                    visible = glassStyle != GlassStyle.OFF,
                 ),
                 Preference.PreferenceItem.CustomPreference(
                     title = stringResource(MR.strings.pref_accent_color),

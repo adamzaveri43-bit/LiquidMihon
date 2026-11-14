@@ -39,6 +39,9 @@ class UiPreferences(
 
     val glassStyle: Preference<GlassStyle> = preferenceStore.getEnum("pref_glass_style", GlassStyle.LIQUID_GLASS)
 
+    /** How see-through glass is, in percent: 0 is opaque, 50 the default look and 100 fully clear. */
+    val glassTransparency: Preference<Int> = preferenceStore.getInt("pref_glass_transparency", 50)
+
     /** ARGB accent color overriding the theme's, 0 for the theme's own. */
     val accentColor: Preference<Int> = preferenceStore.getInt("pref_accent_color", 0)
 

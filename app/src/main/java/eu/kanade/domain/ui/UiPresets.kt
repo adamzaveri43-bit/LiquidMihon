@@ -17,6 +17,7 @@ data class UiPreset(
     val name: String,
     val appTheme: AppTheme? = null,
     val glassStyle: GlassStyle? = null,
+    val glassTransparency: Int? = null,
     val accentColor: Int? = null,
     val appFont: AppFont? = null,
     val amoled: Boolean? = null,
@@ -38,6 +39,7 @@ object UiPresets {
             name = "Liquid Glass",
             appTheme = AppTheme.LIQUID_GLASS,
             glassStyle = GlassStyle.LIQUID_GLASS,
+            glassTransparency = 50,
             accentColor = 0,
             appFont = AppFont.DEFAULT,
             libraryBackground = LibraryBackground.AURORA,
@@ -48,6 +50,7 @@ object UiPresets {
             name = "Frutiger Aero",
             appTheme = AppTheme.FRUTIGER_AERO,
             glassStyle = GlassStyle.FRUTIGER_AERO,
+            glassTransparency = 50,
             accentColor = 0,
             appFont = AppFont.OPEN_SANS,
             libraryBackground = LibraryBackground.AERO,
@@ -92,6 +95,7 @@ object UiPresets {
         name = name,
         appTheme = preferences.appTheme.get(),
         glassStyle = preferences.glassStyle.get(),
+        glassTransparency = preferences.glassTransparency.get(),
         accentColor = preferences.accentColor.get(),
         appFont = preferences.appFont.get(),
         amoled = preferences.themeDarkAmoled.get(),
@@ -109,6 +113,7 @@ object UiPresets {
         with(preferences) {
             preset.appTheme?.let(appTheme::set)
             preset.glassStyle?.let(glassStyle::set)
+            preset.glassTransparency?.let(glassTransparency::set)
             preset.accentColor?.let(accentColor::set)
             preset.appFont?.let(appFont::set)
             preset.amoled?.let(themeDarkAmoled::set)

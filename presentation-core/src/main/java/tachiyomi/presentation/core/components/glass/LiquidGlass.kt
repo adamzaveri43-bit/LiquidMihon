@@ -67,6 +67,32 @@ val LocalLiquidGlass = staticCompositionLocalOf { false }
 val LocalGlassAero = staticCompositionLocalOf { false }
 
 /**
+ * How see-through glass is, from 0 (opaque) through 0.5 (the default look) to 1 (fully clear).
+ */
+val LocalGlassTransparency = staticCompositionLocalOf { DEFAULT_GLASS_TRANSPARENCY }
+
+const val DEFAULT_GLASS_TRANSPARENCY = 0.5f
+
+/**
+ * Scales a glass fill's [alpha] for [transparency]: the default keeps it as designed, lower values make it denser
+ * up to opaque and higher values thin it out up to clear.
+ */
+fun glassAlpha(alpha: Float, transparency: Float): Float {
+    val t = transparency.coerceIn(0f, 1f)
+    return if (t <= DEFAULT_GLASS_TRANSPARENCY) {
+        val f = t / DEFAULT_GLASS_TRANSPARENCY
+        1f + (alpha - 1f) * f
+    } else {
+        val f = (t - DEFAULT_GLASS_TRANSPARENCY) / (1f - DEFAULT_GLASS_TRANSPARENCY)
+        alpha * (1f - f)
+    }
+}
+
+/** [glassAlpha] for the transparency chosen by the user. */
+@Composable
+fun Color.withGlassTransparency(): Color = copy(alpha = glassAlpha(alpha, LocalGlassTransparency.current))
+
+/**
  * The content glass chrome (top bars, bottom bars) of the closest Scaffold should refract, if any.
  */
 val LocalLiquidGlassBackdrop = staticCompositionLocalOf<LiquidGlassBackdrop?> { null }
@@ -125,24 +151,27 @@ object LiquidGlassDefaults {
         if (LocalGlassAero.current) {
             return LiquidGlassColors(
                 tint = (if (isDark) Color(0xFF0E3A5C) else Color(0xFFBFE6FF))
-                    .copy(alpha = if (isBackdropBlurSupported) 0.42f else 0.92f),
+                    .copy(alpha = if (isBackdropBlurSupported) 0.42f else 0.92f)
+                    .withGlassTransparency(),
                 sheen = Color.White.copy(alpha = if (isDark) 0.38f else 0.75f),
                 rim = Color.White.copy(alpha = if (isDark) 0.55f else 0.95f),
                 shadow = Color(0xFF003A66).copy(alpha = 0.35f),
                 gloss = true,
             )
         }
-        val tint = if (isDark) Color(0xFF1C1C22) else Color.White
+        val tint = (if (isDark) Color(0xFF1C1C22) else Color.White)
+            .copy(alpha = tintAlpha)
+            .withGlassTransparency()
         return if (isDark) {
             LiquidGlassColors(
-                tint = tint.copy(alpha = tintAlpha),
+                tint = tint,
                 sheen = Color.White.copy(alpha = 0.08f),
                 rim = Color.White.copy(alpha = 0.34f),
                 shadow = Color.Black.copy(alpha = 0.5f),
             )
         } else {
             LiquidGlassColors(
-                tint = tint.copy(alpha = tintAlpha),
+                tint = tint,
                 sheen = Color.White.copy(alpha = 0.5f),
                 rim = Color.White.copy(alpha = 0.95f),
                 shadow = Color.Black.copy(alpha = 0.18f),
@@ -238,7 +267,7 @@ fun Modifier.liquidGlassEdge(
 
 /** Default tint of a top bar's scroll edge: the theme's background, slightly see-through. */
 @Composable
-fun liquidGlassEdgeTint(): Color = MaterialTheme.colorScheme.background.copy(alpha = 0.85f)
+fun liquidGlassEdgeTint(): Color = MaterialTheme.colorScheme.background.copy(alpha = 0.85f).withGlassTransparency()
 
 private data class BackdropElement(
     val backdrop: LiquidGlassBackdrop,

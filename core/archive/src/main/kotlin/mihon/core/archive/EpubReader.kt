@@ -35,6 +35,53 @@ class EpubReader(private val reader: ArchiveReader) : Closeable by reader {
     }
 
     /**
+     * Returns the zip paths of the epub's content documents, in reading order.
+     */
+    fun getPageDocumentPaths(): List<String> {
+        val ref = getPackageHref()
+        val basePath = getParentDirectory(ref)
+        return getPagesFromDocument(getPackageDocument(ref)).map { resolveZipPath(basePath, it.decodeHref()) }
+    }
+
+    /**
+     * Returns the zip path of the image the epub declares as its cover, if any.
+     */
+    fun getCoverImagePath(): String? {
+        val ref = getPackageHref()
+        val doc = getPackageDocument(ref)
+        val items = doc.select("manifest > item")
+        // EPUB 3 marks it in the manifest, EPUB 2 points at it from a meta tag
+        val item = items.firstOrNull { "cover-image" in it.attr("properties").split(' ') }
+            ?: doc.select("metadata > meta[name=cover]").first()?.attr("content")?.let { id ->
+                items.firstOrNull { it.attr("id") == id }
+            }
+            ?: return null
+        val href = item.attr("href").takeIf { it.isNotBlank() } ?: return null
+        return resolveZipPath(getParentDirectory(ref), href.decodeHref())
+    }
+
+    /**
+     * Returns the language the epub is written in as a BCP 47 tag, if declared.
+     */
+    fun getLanguage(): String? {
+        val doc = getPackageDocument(getPackageHref())
+        return doc.getElementsByTag("dc:language").first()?.text()?.trim()?.takeIf { it.isNotEmpty() }
+    }
+
+    /**
+     * Resolves [relativePath], as written in the document at [documentPath], to a zip path.
+     */
+    fun resolveRelativeTo(documentPath: String, relativePath: String): String {
+        return resolveZipPath(getParentDirectory(documentPath), relativePath.substringBefore('#').decodeHref())
+    }
+
+    private fun String.decodeHref(): String = try {
+        java.net.URLDecoder.decode(replace("+", "%2B"), Charsets.UTF_8.name())
+    } catch (_: IllegalArgumentException) {
+        this
+    }
+
+    /**
      * Returns the path to the package document.
      */
     fun getPackageHref(): String {

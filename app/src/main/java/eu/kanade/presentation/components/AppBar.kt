@@ -63,6 +63,7 @@ import mihon.icons.materialsymbols.rounded.MoreVert
 import mihon.icons.materialsymbols.rounded.Search
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.glass.LiquidGlassDefaults
+import tachiyomi.presentation.core.components.glass.withGlassTransparency
 import tachiyomi.presentation.core.components.glass.LocalLiquidGlass
 import tachiyomi.presentation.core.components.glass.LocalLiquidGlassEdgeProvided
 import tachiyomi.presentation.core.components.glass.liquidGlass
@@ -153,7 +154,7 @@ fun AppBar(
                 base.tint.copy(alpha = 0.7f)
             } else {
                 MaterialTheme.colorScheme.onSurface.copy(alpha = 0.16f)
-            },
+            }.withGlassTransparency(),
             rim = base.rim.copy(alpha = base.rim.alpha.coerceAtLeast(0.55f)),
         )
     }
