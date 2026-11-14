@@ -68,15 +68,15 @@ internal sealed interface BookPageItem {
  * reader asks for it.
  */
 internal class BookPageRenderer(
-    private val style: BookPageStyle,
+    private val pageStyle: BookPageStyle,
     private val openImage: (String) -> InputStream?,
 ) {
 
     private val bodyPaint = TextPaint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
-        color = style.textColor
-        textSize = style.textSize
-        typeface = style.typeface
-        style.locale?.let { textLocale = it }
+        color = pageStyle.textColor
+        textSize = pageStyle.textSize
+        typeface = pageStyle.typeface
+        pageStyle.locale?.let { textLocale = it }
     }
 
     private val imagePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
@@ -92,8 +92,8 @@ internal class BookPageRenderer(
         val pages = mutableListOf<BookPage>()
         var items = mutableListOf<BookPageItem>()
         var y = 0f
-        val contentHeight = style.contentHeight.toFloat()
-        val bodyLineHeight = bodyPaint.fontSpacing * style.lineSpacing
+        val contentHeight = pageStyle.contentHeight.toFloat()
+        val bodyLineHeight = bodyPaint.fontSpacing * pageStyle.lineSpacing
 
         fun newPage() {
             if (items.isNotEmpty()) pages += BookPage.Text(items)
@@ -112,27 +112,27 @@ internal class BookPageRenderer(
                         pages += BookPage.Image(block.path)
                         return@forEach
                     }
-                    val width = min(size.first * style.density, style.contentWidth.toFloat())
+                    val width = min(size.first * pageStyle.density, pageStyle.contentWidth.toFloat())
                     val height = width * size.second / size.first
                     if (height > contentHeight * INLINE_IMAGE_MAX_HEIGHT) {
                         // Illustrations and full page art are shown on a page of their own, like a comic page
                         newPage()
                         pages += BookPage.Image(block.path)
                     } else {
-                        val spacing = if (y > 0f) style.textSize * PARAGRAPH_GAP_EM else 0f
+                        val spacing = if (y > 0f) pageStyle.textSize * PARAGRAPH_GAP_EM else 0f
                         if (y + spacing + height > contentHeight) newPage()
                         val top = if (y > 0f) y + spacing else 0f
-                        val left = (style.contentWidth - width) / 2f
+                        val left = (pageStyle.contentWidth - width) / 2f
                         items += BookPageItem.InlineImage(block.path, RectF(left, top, left + width, top + height))
                         y = top + height
                     }
                 }
                 is BookBlock.Text -> {
-                    val indent = (block.indentEm * style.textSize).roundToInt()
-                        .coerceAtMost(style.contentWidth / 2)
-                    val layout = layoutText(block, style.contentWidth - indent)
+                    val indent = (block.indentEm * pageStyle.textSize).roundToInt()
+                        .coerceAtMost(pageStyle.contentWidth / 2)
+                    val layout = layoutText(block, pageStyle.contentWidth - indent)
                     if (layout.lineCount == 0) return@forEach
-                    val spacing = if (y > 0f) block.spacingEm * style.textSize else 0f
+                    val spacing = if (y > 0f) block.spacingEm * pageStyle.textSize else 0f
                     // Keep a heading together with the start of what it heads
                     val needed = if (block.isHeading) layout.height + bodyLineHeight * 2 else lineHeight(layout, 0)
                     if (y > 0f && y + spacing + min(needed, contentHeight) > contentHeight) {
@@ -177,11 +177,11 @@ internal class BookPageRenderer(
     }
 
     private fun draw(page: BookPage.Text): ByteArray {
-        val bitmap = Bitmap.createBitmap(style.pageWidth, style.pageHeight, Bitmap.Config.ARGB_8888)
+        val bitmap = Bitmap.createBitmap(pageStyle.pageWidth, pageStyle.pageHeight, Bitmap.Config.ARGB_8888)
         try {
             val canvas = Canvas(bitmap)
-            canvas.drawColor(style.backgroundColor)
-            canvas.translate(style.horizontalMargin.toFloat(), style.verticalMargin.toFloat())
+            canvas.drawColor(pageStyle.backgroundColor)
+            canvas.translate(pageStyle.horizontalMargin.toFloat(), pageStyle.verticalMargin.toFloat())
             page.items.forEach { item ->
                 when (item) {
                     is BookPageItem.Lines -> drawLines(canvas, item)
@@ -223,12 +223,12 @@ internal class BookPageRenderer(
         val paint = if (block.sizeScale == 1f) {
             bodyPaint
         } else {
-            TextPaint(bodyPaint).apply { textSize = style.textSize * block.sizeScale }
+            TextPaint(bodyPaint).apply { textSize = pageStyle.textSize * block.sizeScale }
         }
-        val justify = style.justify && block.alignment == BookAlignment.Default && !block.isHeading
+        val justify = pageStyle.justify && block.alignment == BookAlignment.Default && !block.isHeading
         return StaticLayout.Builder.obtain(block.text, 0, block.text.length, paint, width.coerceAtLeast(1))
             .setAlignment(block.alignment.toLayoutAlignment())
-            .setLineSpacing(0f, style.lineSpacing)
+            .setLineSpacing(0f, pageStyle.lineSpacing)
             .setIncludePad(false)
             .setBreakStrategy(Layout.BREAK_STRATEGY_HIGH_QUALITY)
             .setHyphenationFrequency(Layout.HYPHENATION_FREQUENCY_NORMAL)

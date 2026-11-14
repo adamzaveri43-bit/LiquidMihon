@@ -63,10 +63,10 @@ import mihon.icons.materialsymbols.rounded.MoreVert
 import mihon.icons.materialsymbols.rounded.Search
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.glass.LiquidGlassDefaults
-import tachiyomi.presentation.core.components.glass.withGlassTransparency
 import tachiyomi.presentation.core.components.glass.LocalLiquidGlass
 import tachiyomi.presentation.core.components.glass.LocalLiquidGlassEdgeProvided
 import tachiyomi.presentation.core.components.glass.liquidGlass
+import tachiyomi.presentation.core.components.glass.withGlassTransparency
 import tachiyomi.presentation.core.components.material.Icon
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.clearFocusOnSoftKeyboardHide
