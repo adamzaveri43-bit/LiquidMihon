@@ -34,8 +34,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -94,7 +96,11 @@ internal fun LibraryCoverFlow(
     searchQuery: String?,
     onGlobalSearchClicked: () -> Unit,
 ) {
-    val pagerState = rememberPagerState { entries.size }
+    // The pager reads its page count and keys outside of composition, so they both go through the latest list.
+    // When entries go away (read, moved into a folder, filtered out) it can briefly still ask for pages of the
+    // old, longer list: those are skipped instead of crashing
+    val latestEntries by rememberUpdatedState(entries)
+    val pagerState = rememberPagerState { latestEntries.size }
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
 
@@ -163,7 +169,7 @@ internal fun LibraryCoverFlow(
                         state = pagerState,
                         pagerSnapDistance = PagerSnapDistance.atMost(12),
                     ),
-                    key = { entries[it].key },
+                    key = { latestEntries.getOrNull(it)?.key ?: "missing:$it" },
                     modifier = Modifier
                         .fillMaxWidth()
                         // Taps are resolved by where they land in the row rather than by which cover is
@@ -206,7 +212,7 @@ internal fun LibraryCoverFlow(
                             )
                         },
                 ) { page ->
-                    val entry = entries[page]
+                    val entry = latestEntries.getOrNull(page) ?: return@HorizontalPager
                     CoverFlowItem(
                         coverData = entry.coverData(),
                         isSelected = entry is LibraryEntry.Manga && entry.item.id in selection,
