@@ -18,6 +18,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.State
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -44,11 +45,13 @@ import coil3.compose.AsyncImage
 import coil3.gif.AnimatedImageDecoder
 import coil3.gif.GifDecoder
 import coil3.imageLoader
+import coil3.memory.MemoryCache
 import coil3.request.ImageRequest
 import coil3.request.SuccessResult
 import coil3.request.allowHardware
 import coil3.toBitmap
 import eu.kanade.domain.ui.model.LibraryBackground
+import eu.kanade.presentation.util.rememberDeviceConstrained
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -148,21 +151,26 @@ private fun CoverGradientBackground(colors: List<Color>, animate: Boolean, blobA
 private fun CustomImageBackground(imagePath: String, animate: Boolean, blur: Int) {
     if (imagePath.isBlank()) return
     val context = LocalContext.current
-    // Separate loader so GIFs and animated WebPs play
-    val imageLoader = remember(context) {
-        ImageLoader.Builder(context)
-            .components {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    add(AnimatedImageDecoder.Factory())
-                } else {
-                    add(GifDecoder.Factory())
+    val imageLoader = remember(context) { BackgroundImageLoader.get(context) }
+    val time = rememberAnimationTime(animate, AMBIENT_FPS)
+    val metrics = context.resources.displayMetrics
+    val request = remember(imagePath, blur > 0) {
+        ImageRequest.Builder(context)
+            .data(File(imagePath))
+            .apply {
+                // A blurred image loses its detail anyway: decoding it smaller saves memory and GPU time on
+                // every frame it's drawn, with no visible difference
+                if (blur > 0) {
+                    size(
+                        (metrics.widthPixels / BLURRED_IMAGE_DOWNSAMPLE).coerceAtLeast(1),
+                        (metrics.heightPixels / BLURRED_IMAGE_DOWNSAMPLE).coerceAtLeast(1),
+                    )
                 }
             }
             .build()
     }
-    val time = rememberAnimationTime(animate, AMBIENT_FPS)
     AsyncImage(
-        model = File(imagePath),
+        model = request,
         imageLoader = imageLoader,
         contentDescription = null,
         contentScale = ContentScale.Crop,
@@ -178,6 +186,36 @@ private fun CustomImageBackground(imagePath: String, animate: Boolean, blur: Int
             }
             .then(if (blur > 0) Modifier.blur(blur.dp) else Modifier),
     )
+}
+
+/**
+ * Loader for the library background, which plays GIFs and animated WebPs.
+ *
+ * It's shared by the whole app: a loader holds its own memory cache, so building one each time the library is
+ * shown kept piling up decoded backgrounds until the app ran out of memory.
+ */
+private object BackgroundImageLoader {
+    @Volatile
+    private var loader: ImageLoader? = null
+
+    fun get(context: Context): ImageLoader = loader ?: synchronized(this) {
+        loader ?: run {
+            val appContext = context.applicationContext
+            ImageLoader.Builder(appContext)
+                .components {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        add(AnimatedImageDecoder.Factory())
+                    } else {
+                        add(GifDecoder.Factory())
+                    }
+                }
+                // Only ever one background at a time
+                .memoryCache { MemoryCache.Builder().maxSizePercent(appContext, 0.05).build() }
+                .diskCache(null)
+                .build()
+                .also { loader = it }
+        }
+    }
 }
 
 @Composable
@@ -310,7 +348,10 @@ private val aeroBubbles = List(14) { index ->
 @Composable
 private fun rememberAnimationTime(animate: Boolean, fps: Int): State<Float> {
     val time = remember { mutableFloatStateOf(0f) }
-    if (animate) {
+    // Moving backgrounds are decoration: they hold still while saving battery or when the phone runs hot, so the
+    // GPU's budget goes to scrolling and reading instead
+    val constrained by rememberDeviceConstrained()
+    if (animate && !constrained) {
         LaunchedEffect(fps) {
             val offset = time.floatValue
             val start = withFrameNanos { it }
@@ -351,6 +392,7 @@ private fun Modifier.downsampled(factor: Int): Modifier = layout { measurable, c
 }
 
 private const val GRADIENT_DOWNSAMPLE = 4
+private const val BLURRED_IMAGE_DOWNSAMPLE = 3
 private const val AMBIENT_FPS = 30
 private const val AERO_FPS = 60
 
