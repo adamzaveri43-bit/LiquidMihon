@@ -209,4 +209,33 @@ class ArticleExtractorTest {
         items.last().imageUrl shouldBe "https://www.topgear.com/files/concept.jpg"
         items.last().summary shouldBe "A first look"
     }
+
+    @Test
+    fun `leaves out boxes pointing to the site's other stories and newsletter pitches`() {
+        val body = (1..4).joinToString("") { "<p>Paragraph $it of the story, long enough to be part of the body.</p>" }
+        val html = """
+            <html><body><article>
+              $body
+              <h3>You might like</h3>
+              <a href="/car-news/other-story"><img src="https://img.example/other.jpg"><h3>Another story</h3></a>
+              <p><a href="https://cars.example/car-news/older-story">Read next: an older story</a></p>
+              <h2>Top Gear Newsletter</h2>
+              <p>Get all the latest news, reviews and exclusives, direct to your inbox.</p>
+              <p><a href="https://cars.example/buy/123">The helmet we liked</a></p>
+              <p>A closing paragraph that cites <a href="https://other.example/report">a report</a> elsewhere.</p>
+            </article></body></html>
+        """.trimIndent()
+
+        val article = ArticleExtractor.fromPage(html, "https://cars.example/car-news/this-story", item = null)
+        val text = article.blocks.joinToString("\n") { it.text() }
+
+        text.shouldNotContain("You might like")
+        text.shouldNotContain("Another story")
+        text.shouldNotContain("Read next")
+        text.shouldNotContain("Newsletter")
+        text.shouldNotContain("inbox")
+        text shouldContain "The helmet we liked"
+        text shouldContain "A closing paragraph"
+        article.blocks.none { it is ArticleBlock.Image && it.url.endsWith("other.jpg") } shouldBe true
+    }
 }

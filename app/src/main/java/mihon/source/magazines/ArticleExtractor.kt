@@ -377,6 +377,8 @@ object ArticleExtractor {
         val seenImages = HashSet<String>()
         fun walk(el: Element) {
             if (NEGATIVE.containsMatchIn(el.className() + " " + el.id()) && el != root) return
+            // "You might like" cards and "Read next: …" lines: links to the site's other stories, not this one
+            if (el != root && isLinkToOtherStory(el)) return
             when (el.tagName()) {
                 "img" -> {
                     val src = imageSrc(el) ?: return
@@ -432,9 +434,45 @@ object ArticleExtractor {
         return blocks.dropBoilerplate().take(MAX_BLOCKS)
     }
 
+    /**
+     * True for a card or short line that is just a link to another page of the same site, like the
+     * "You might like" and "Read next" boxes sites put inside articles. Links to other sites (shops,
+     * sources) are kept, as they're part of the story.
+     */
+    private fun isLinkToOtherStory(el: Element): Boolean {
+        val tag = el.tagName()
+        val isCard = tag == "a" && el.selectFirst("h1, h2, h3, h4, h5, h6") != null
+        if (!isCard && tag !in LINK_LINE_TAGS) return false
+        val text = el.text()
+        if (!isCard && (text.isEmpty() || text.length > MAX_LINK_LINE)) return false
+        val host = hostOf(el.baseUri())
+        if (host.isEmpty()) return false
+        val links = (if (tag == "a") listOf(el) else el.select("a[href]")).filter { link ->
+            val href = link.absUrl("href")
+            val path = href.substringAfter(host)
+            hostOf(href) == host && path.trim('/').isNotEmpty() && '#' !in href &&
+                !IMAGE_EXT.containsMatchIn(href) && !SHOP_PATH.containsMatchIn(path)
+        }
+        if (links.isEmpty()) return false
+        if (isCard) return true
+        val linkText = links.sumOf { it.text().length }
+        return linkText >= text.length * LINK_LINE_SHARE
+    }
+
+    private fun hostOf(url: String) = url.substringAfter("://", "").substringBefore('/').removePrefix("www.")
+
+    /** Shopping redirects on a site's own domain ("/buy/123"): product links, part of the story. */
+    private val SHOP_PATH =
+        Regex("^/(buy|go|out|shop|redirect|aff|affiliate|click|track|link|products?)/", RegexOption.IGNORE_CASE)
+
+    private val LINK_LINE_TAGS = setOf("p", "li", "h1", "h2", "h3", "h4", "h5", "h6")
+    private const val MAX_LINK_LINE = 220
+    private const val LINK_LINE_SHARE = 0.8
+
     /** Drops lines like "Read more", affiliate notices and newsletter pitches. */
     private fun List<ArticleBlock>.dropBoilerplate(): List<ArticleBlock> = filterNot { block ->
         val text = block.text()
+        if (block is ArticleBlock.Heading && RECIRCULATION_HEADING.containsMatchIn(text)) return@filterNot true
         block !is ArticleBlock.Image && (text.length < 2 || (BOILERPLATE.containsMatchIn(text) && text.length < 300))
     }
 
@@ -565,6 +603,15 @@ object ArticleExtractor {
 
     private val EMAIL_WITH_NAME = Regex("""\S+@\S+\s*\((.+)\)""")
 
+    /** Headings of boxes pointing to other stories ("You might like", "Read next: …"). */
+    private val RECIRCULATION_HEADING = Regex(
+        "^(you might (also )?like|you may (also )?like|related( stories| articles| reading| content)?|" +
+            "read (more|next|this next)|more (from|stories|on this|like this)|recommended( for you| reading)?|" +
+            "most (popular|read)|trending( now)?|popular( now)?|up next|keep reading|don't miss|also read|" +
+            "further reading|what to read next|latest (news|stories)|in case you missed it)\\b",
+        RegexOption.IGNORE_CASE,
+    )
+
     private const val BLOCK_PAGE_MAX = 3000
     private const val HEADLINE_SEARCH = 4
 
@@ -599,6 +646,8 @@ object ArticleExtractor {
             "we may earn (a )?commission|may receive a commission|editor-tested|independently selected|" +
             "affiliate (link|marketing)|the post .* (appeared first|first appeared) on|" +
             "unlock premium|unlimited access to|magazine subscription|" +
+            "sign up (for|to) (our|the) .{0,40}newsletter|^.{0,40} newsletter$|^newsletter$|" +
+            "direct to your inbox|delivered (straight )?to your inbox|" +
             "become a .{0,30}member|follow .{0,30} to ensure|please enable js|disable any ad ?blocker",
         RegexOption.IGNORE_CASE,
     )
