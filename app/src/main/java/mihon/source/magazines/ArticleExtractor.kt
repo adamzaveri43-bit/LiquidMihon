@@ -173,7 +173,8 @@ object ArticleExtractor {
 
     /** Builds an article from a feed item's own HTML, or null if the feed has none. */
     fun fromFeedItem(item: FeedItem): Article? {
-        val html = item.contentHtml ?: return null
+        // Feeds without full content still have a summary, which beats nothing when the site is blocked.
+        val html = item.contentHtml ?: item.summary ?: return null
         val blocks = blocksOf(Jsoup.parseBodyFragment(html, item.link).body())
         return Article(item.title, item.author, item.date, item.imageUrl, blocks).takeIf { it.textLength > 0 }
     }
@@ -199,6 +200,7 @@ object ArticleExtractor {
     /** Builds an article from its web page. [item] fills in what the page leaves out. */
     fun fromPage(html: String, url: String, item: FeedItem?): Article {
         val doc = Jsoup.parse(html, url)
+        if (isBlockPage(doc)) throw BlockedException(url)
         val ldArticle = doc.ldArticle()
         val title = item?.title
             ?: ldArticle?.string("headline")
@@ -225,6 +227,12 @@ object ArticleExtractor {
             else -> item?.summary?.let { blocksOf(Jsoup.parseBodyFragment(it, url).body()) }.orEmpty()
         }
         return Article(title.ifBlank { url }, author, date, leadImage, blocks)
+    }
+
+    /** True for bot checks and "access denied" pages served instead of the article. */
+    internal fun isBlockPage(doc: Document): Boolean {
+        val text = doc.body()?.text().orEmpty()
+        return text.length < BLOCK_PAGE_MAX && BLOCK_PAGE.containsMatchIn(doc.title() + " " + text)
     }
 
     /** The element whose own (and figure/div children's) paragraphs hold the most text. */
@@ -466,6 +474,15 @@ object ArticleExtractor {
 
     private val EMAIL_WITH_NAME = Regex("""\S+@\S+\s*\((.+)\)""")
 
+    private const val BLOCK_PAGE_MAX = 3000
+
+    private val BLOCK_PAGE = Regex(
+        "access (to this page )?(has been )?denied|why have i been blocked|are you a robot|just a moment\\.\\.\\.|" +
+            "attention required|verify you are human|enable javascript and cookies|please enable js|" +
+            "unusual traffic|request blocked|automation tools",
+        RegexOption.IGNORE_CASE,
+    )
+
     private const val MIN_PARAGRAPH = 25
     private const val MIN_FULL_TEXT = 600
     private const val COMPLETE_TEXT = 2000
@@ -488,7 +505,8 @@ object ArticleExtractor {
         "^(read more|related:|see also|sign up|subscribe|advertisement|share this|follow us|comments$|" +
             "read (the )?full (article|story)|updated:|readtime:|image credits)|" +
             "we may earn (a )?commission|may receive a commission|editor-tested|independently selected|" +
-            "affiliate (link|marketing)|the post .* appeared first on|unlock premium|unlimited access to|" +
+            "affiliate (link|marketing)|the post .* (appeared first|first appeared) on|" +
+            "unlock premium|unlimited access to|" +
             "become a .{0,30}member|follow .{0,30} to ensure|please enable js|disable any ad ?blocker",
         RegexOption.IGNORE_CASE,
     )
@@ -501,3 +519,7 @@ object ArticleExtractor {
 
     private val IMAGE_EXT = Regex("""\.(jpe?g|png|webp|avif|gif)(\?|$)""", RegexOption.IGNORE_CASE)
 }
+
+/** The site answered with a bot check or block page instead of the article. */
+class BlockedException(url: String) :
+    Exception("${url.substringAfter("://").substringBefore('/')} blocked the request")

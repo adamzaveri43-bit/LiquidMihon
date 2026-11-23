@@ -156,4 +156,15 @@ class ArticleExtractorTest {
 
         ArticleExtractor.pick(null, null).shouldBeNull()
     }
+
+    @Test
+    fun `refuses bot-check pages instead of reading them as the article`() {
+        val html = """
+            <html><head><title>Access to this page has been denied</title></head>
+            <body><p>Access to this page has been denied because we believe you are using automation tools.</p></body></html>
+        """.trimIndent()
+        io.kotest.assertions.throwables.shouldThrow<BlockedException> {
+            ArticleExtractor.fromPage(html, "https://blocked.example/story", item = null)
+        }
+    }
 }

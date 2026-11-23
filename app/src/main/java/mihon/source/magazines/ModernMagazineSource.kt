@@ -287,6 +287,10 @@ class ArtMagazines : ModernMagazineSource(MagazineCategory.ART)
 
 class TechMagazines : ModernMagazineSource(MagazineCategory.TECH)
 
+class TravelMagazines : ModernMagazineSource(MagazineCategory.TRAVEL)
+
+class InteriorMagazines : ModernMagazineSource(MagazineCategory.INTERIORS)
+
 /**
  * Any magazine with a feed: search a site's address (or its feed's) and it becomes an entry like
  * the built-in ones. The feed is found from the page's `<link rel="alternate">` tags, or by trying

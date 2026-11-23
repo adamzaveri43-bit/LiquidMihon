@@ -24,9 +24,11 @@ import mihon.source.magazines.ArtMagazines
 import mihon.source.magazines.CarMagazines
 import mihon.source.magazines.CustomMagazines
 import mihon.source.magazines.DesignMagazines
+import mihon.source.magazines.InteriorMagazines
 import mihon.source.magazines.MensStyleMagazines
 import mihon.source.magazines.ModernMagazineSource
 import mihon.source.magazines.TechMagazines
+import mihon.source.magazines.TravelMagazines
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
 import org.jsoup.Jsoup
@@ -408,6 +410,8 @@ object BuiltinSources {
             DesignMagazines(),
             ArtMagazines(),
             TechMagazines(),
+            TravelMagazines(),
+            InteriorMagazines(),
             CustomMagazines(),
         )
     }
