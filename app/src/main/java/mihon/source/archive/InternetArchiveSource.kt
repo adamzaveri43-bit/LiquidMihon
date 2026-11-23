@@ -97,7 +97,7 @@ abstract class InternetArchiveSource : HttpSource() {
             ?: filters.filterIsInstance<SortFilter>().firstOrNull()?.toSortParam()
             ?: if (trimmed.isEmpty()) "downloads desc" else null
 
-        val url = "$baseUrl/advancedsearch.php".toHttpUrl().newBuilder().apply {
+        val searchUrl = "$baseUrl/advancedsearch.php".toHttpUrl().newBuilder().apply {
             addQueryParameter("q", clauses.joinToString(" AND "))
             SEARCH_FIELDS.forEach { addQueryParameter("fl[]", it) }
             if (sort != null) addQueryParameter("sort[]", sort)
@@ -106,7 +106,7 @@ abstract class InternetArchiveSource : HttpSource() {
             addQueryParameter("output", "json")
         }.build()
 
-        val response = client.newCall(GET(url, headers)).awaitSuccess().parseJson().jsonObject
+        val response = client.newCall(GET(searchUrl, headers)).awaitSuccess().parseJson().jsonObject
         val body = response["response"]?.jsonObject ?: return MangasPage(emptyList(), false)
         val total = body["numFound"]?.jsonPrimitive?.contentOrNull?.toIntOrNull() ?: 0
         val mangas = body["docs"]?.jsonArray.orEmpty().map { doc ->
@@ -205,14 +205,14 @@ abstract class InternetArchiveSource : HttpSource() {
             ?: throw Exception("This item has no page scans on archive.org, so it can't be shown as pages.")
         val subPrefix = PAGE_ARCHIVE_SUFFIXES.fold(pageImages) { name, suffix -> name.removeSuffix(suffix) }
 
-        val url = "https://$server/BookReader/BookReaderJSIA.php".toHttpUrl().newBuilder()
+        val pageListUrl = "https://$server/BookReader/BookReaderJSIA.php".toHttpUrl().newBuilder()
             .addQueryParameter("id", identifier)
             .addQueryParameter("itemPath", dir)
             .addQueryParameter("server", server)
             .addQueryParameter("subPrefix", subPrefix)
             .addQueryParameter("format", "json")
             .build()
-        val data = client.newCall(GET(url, headers)).awaitSuccess().parseJson().jsonObject["data"]?.jsonObject
+        val data = client.newCall(GET(pageListUrl, headers)).awaitSuccess().parseJson().jsonObject["data"]?.jsonObject
             ?: throw Exception("archive.org returned no page list for this item.")
 
         val restricted = data["data"]?.jsonObject?.get("isRestricted")?.jsonPrimitive?.contentOrNull == "true"
@@ -303,12 +303,15 @@ abstract class InternetArchiveSource : HttpSource() {
                 "AND -title:(playboy OR penthouse OR hustler)"
 
         /** Requires page scans (so the item can be read as images) and skips borrow-only items. */
-        const val READABLE = "mediatype:texts AND format:\"Single Page Processed JP2 ZIP\" AND -access-restricted-item:true"
+        const val READABLE =
+            "mediatype:texts AND format:\"Single Page Processed JP2 ZIP\" AND -access-restricted-item:true"
 
         private fun coverUrl(identifier: String) = "https://archive.org/services/img/$identifier"
 
         /** Keeps the user's words but stops stray Lucene syntax characters from breaking the query. */
-        private fun escape(query: String): String = query.replace(Regex("""[\\+!(){}\[\]^"~*?:/]|&&|\|\|"""), " ").trim()
+        private val LUCENE_SPECIAL = Regex("""[\\+!(){}\[\]^"~*?:/]|&&|\|\|""")
+
+        private fun escape(query: String): String = query.replace(LUCENE_SPECIAL, " ").trim()
 
         private fun parseDate(value: String): Long? {
             if (value.isBlank()) return null
@@ -345,11 +348,14 @@ class InternetArchiveMagazines : InternetArchiveSource() {
             "subject:(menswear OR \"mens fashion\" OR \"men's fashion\" OR \"men fashion\" OR \"mens style\" OR " +
             "\"men's style\" OR \"men's magazine\" OR \"mens magazine\") OR title:(GQ OR Esquire OR " +
             "\"Arena Homme\" OR \"Men's Health\" OR \"Fantastic Man\" OR Monocle OR \"Men's Journal\")",
-        "Fashion" to "subject:(fashion OR style OR clothing OR couture) OR title:(Vogue OR \"Harper's Bazaar\" OR Elle OR \"i-D\")",
+        "Fashion" to
+            "subject:(fashion OR style OR clothing OR couture) OR " +
+            "title:(Vogue OR \"Harper's Bazaar\" OR Elle OR \"i-D\")",
         "Art & design" to
             "subject:(art OR \"fine art\" OR painting OR sculpture OR \"contemporary art\" OR design OR " +
             "\"graphic design\" OR illustration) OR title:(Artforum OR Frieze OR \"Art in America\" OR Juxtapoz)",
-        "Photography" to "subject:(photography OR photographs OR camera) OR title:(Aperture OR \"Popular Photography\")",
+        "Photography" to
+            "subject:(photography OR photographs OR camera) OR title:(Aperture OR \"Popular Photography\")",
         "Architecture & interiors" to "subject:(architecture OR \"interior design\" OR interiors OR \"home design\")",
         "Cars & motoring" to
             "subject:(cars OR car OR automobile OR automobiles OR automotive OR \"hot rod\" OR motorsport OR " +
