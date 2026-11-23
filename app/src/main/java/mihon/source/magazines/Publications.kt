@@ -18,7 +18,33 @@ data class Publication(
     val color: Int,
     val fullTextInFeed: Boolean = false,
     val kind: FeedKind = FeedKind.RSS,
+    val archive: Archive? = null,
 )
+
+/** Where a publication's older stories can be found, beyond what its feed lists. */
+sealed interface Archive {
+    /** The feed itself pages back: `feed?paged=2`, `feed?paged=3`… (WordPress and similar). */
+    data object FeedPages : Archive
+
+    /**
+     * One sitemap per month, e.g. `https://www.gq.com/sitemap-{yyyy}-{MM}.xml`.
+     *
+     * @param pathFilter only addresses containing this belong to the publication (for a section of a site)
+     */
+    data class MonthlySitemap(val pattern: String, val pathFilter: String? = null) : Archive {
+        fun url(year: Int, month: Int) = pattern
+            .replace("{yyyy}", year.toString())
+            .replace("{MM}", month.toString().padStart(2, '0'))
+    }
+
+    /** Numbered listing pages for a [FeedKind.NEXT_DATA] publication, e.g. `…/car-news/page/{n}`. */
+    data class ListingPages(val pattern: String) : Archive {
+        fun url(page: Int) = pattern.replace("{n}", page.toString())
+    }
+
+    /** The publication's [FeedKind.SITEMAP] already lists its whole history. */
+    data object FullSitemap : Archive
+}
 
 /** Where a publication's list of stories comes from. */
 enum class FeedKind {
@@ -44,6 +70,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "https://www.gq.com/feed/rss",
                 "Style, culture and the men who shape it.",
                 0x111111,
+                archive = Archive.MonthlySitemap("https://www.gq.com/sitemap-{yyyy}-{MM}.xml"),
             ),
             Publication(
                 "esquire",
@@ -94,6 +121,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "Classic menswear, dressing well on a budget.",
                 0x2E4A62,
                 fullTextInFeed = true,
+                archive = Archive.FeedPages,
             ),
             Publication(
                 "permanent-style",
@@ -103,6 +131,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "Tailoring, craft and quality menswear.",
                 0x3B2F2A,
                 fullTextInFeed = true,
+                archive = Archive.FeedPages,
             ),
             Publication(
                 "die-workwear",
@@ -111,6 +140,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "https://dieworkwear.com/feed/",
                 "Essays on menswear, tailoring and taste.",
                 0x4A4A3A,
+                archive = Archive.FeedPages,
             ),
             Publication(
                 "gear-patrol",
@@ -120,6 +150,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "Gear, watches, cars and style.",
                 0x1F3A2F,
                 fullTextInFeed = true,
+                archive = Archive.FeedPages,
             ),
             Publication(
                 "hodinkee",
@@ -138,6 +169,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "Men's style, travel and luxury.",
                 0x1A1A2E,
                 fullTextInFeed = true,
+                archive = Archive.FeedPages,
             ),
             Publication(
                 "man-of-many",
@@ -154,6 +186,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "https://www.vogue.com/feed/rss",
                 "Fashion, beauty and culture.",
                 0x000000,
+                archive = Archive.MonthlySitemap("https://www.vogue.com/sitemap-{yyyy}-{MM}.xml"),
             ),
             Publication(
                 "vogue-fashion",
@@ -236,6 +269,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "Classic, collector and enthusiast cars.",
                 0x00263E,
                 fullTextInFeed = true,
+                archive = Archive.FeedPages,
             ),
             Publication(
                 "insideevs",
@@ -252,6 +286,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "https://electrek.co/feed/",
                 "Electric vehicles and clean transport.",
                 0x1E73BE,
+                archive = Archive.FeedPages,
             ),
             Publication(
                 "top-gear",
@@ -261,6 +296,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "Car news, reviews, supercars and concepts.",
                 0x00A0DF,
                 kind = FeedKind.NEXT_DATA,
+                archive = Archive.ListingPages("https://www.topgear.com/car-news/page/{n}"),
             ),
             Publication(
                 "car-design-news",
@@ -270,6 +306,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "Concept cars, interiors and the designers behind them.",
                 0x1A1A1A,
                 kind = FeedKind.SITEMAP,
+                archive = Archive.FullSitemap,
             ),
             Publication(
                 "new-atlas-auto",
@@ -292,6 +329,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "Architecture, interiors and design, including car design.",
                 0x000000,
                 fullTextInFeed = true,
+                archive = Archive.FeedPages,
             ),
             Publication(
                 "designboom",
@@ -301,6 +339,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "Architecture, design, art and technology.",
                 0xE2001A,
                 fullTextInFeed = true,
+                archive = Archive.FeedPages,
             ),
             Publication(
                 "designboom-tech",
@@ -310,6 +349,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "Vehicles, concept cars and industrial design.",
                 0xB00016,
                 fullTextInFeed = true,
+                archive = Archive.FeedPages,
             ),
             Publication(
                 "wallpaper",
@@ -319,6 +359,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "Design, interiors, fashion, art and travel.",
                 0x1C1C1C,
                 fullTextInFeed = true,
+                archive = Archive.MonthlySitemap("https://www.wallpaper.com/sitemap-{yyyy}-{MM}.xml"),
             ),
             Publication(
                 "archdaily",
@@ -345,6 +386,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "Design, culture, travel and style.",
                 0x00A0B0,
                 fullTextInFeed = true,
+                archive = Archive.FeedPages,
             ),
             Publication(
                 "creative-boom",
@@ -368,6 +410,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "Contemporary art and visual culture.",
                 0x111111,
                 fullTextInFeed = true,
+                archive = Archive.FeedPages,
             ),
             Publication(
                 "artnews",
@@ -377,6 +420,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "News from the art world.",
                 0xC8102E,
                 fullTextInFeed = true,
+                archive = Archive.FeedPages,
             ),
             Publication(
                 "hyperallergic",
@@ -416,6 +460,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "https://www.wired.com/feed/rss",
                 "How technology is changing the world.",
                 0x000000,
+                archive = Archive.MonthlySitemap("https://www.wired.com/sitemap-{yyyy}-{MM}.xml"),
             ),
             Publication(
                 "ars-technica",
@@ -464,6 +509,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "https://www.cntraveler.com/feed/rss",
                 "Destinations, hotels and how to travel well.",
                 0x0F2B46,
+                archive = Archive.MonthlySitemap("https://www.cntraveler.com/sitemap-{yyyy}-{MM}.xml"),
             ),
             Publication(
                 "cn-traveller-uk",
@@ -472,6 +518,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "https://www.cntraveller.com/feed/rss",
                 "The British edition: hotels, food and trips.",
                 0x1C3D5A,
+                archive = Archive.MonthlySitemap("https://www.cntraveller.com/sitemap-{yyyy}-{MM}.xml"),
             ),
             Publication(
                 "wallpaper-travel",
@@ -481,6 +528,10 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "Design hotels, cities and travel gear.",
                 0x1C1C1C,
                 fullTextInFeed = true,
+                archive = Archive.MonthlySitemap(
+                    "https://www.wallpaper.com/sitemap-{yyyy}-{MM}.xml",
+                    pathFilter = "/travel/",
+                ),
             ),
             Publication(
                 "monocle",
@@ -490,6 +541,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "Global affairs, cities, travel and design.",
                 0xF2C200,
                 fullTextInFeed = true,
+                archive = Archive.FeedPages,
             ),
             Publication(
                 "matador",
@@ -499,6 +551,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "Travel stories, guides and destinations.",
                 0xC1440E,
                 fullTextInFeed = true,
+                archive = Archive.FeedPages,
             ),
             Publication(
                 "roads-and-kingdoms",
@@ -508,6 +561,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "Food, travel and journalism from around the world.",
                 0x7A1F1F,
                 fullTextInFeed = true,
+                archive = Archive.FeedPages,
             ),
             Publication(
                 "the-points-guy",
@@ -535,6 +589,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "The business of travel.",
                 0x111111,
                 fullTextInFeed = true,
+                archive = Archive.FeedPages,
             ),
         ),
     ),
@@ -548,6 +603,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "https://www.architecturaldigest.com/feed/rss",
                 "Celebrity homes, design and architecture.",
                 0x000000,
+                archive = Archive.MonthlySitemap("https://www.architecturaldigest.com/sitemap-{yyyy}-{MM}.xml"),
             ),
             Publication(
                 "elle-decor",
@@ -580,6 +636,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "https://www.houseandgarden.co.uk/feed/rss",
                 "British interiors, gardens and food.",
                 0x2F5233,
+                archive = Archive.MonthlySitemap("https://www.houseandgarden.co.uk/sitemap-{yyyy}-{MM}.xml"),
             ),
             Publication(
                 "livingetc",
@@ -589,6 +646,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "Modern interiors and design ideas.",
                 0xE4002B,
                 fullTextInFeed = true,
+                archive = Archive.MonthlySitemap("https://www.livingetc.com/sitemap-{yyyy}-{MM}.xml"),
             ),
             Publication(
                 "homes-and-gardens",
@@ -598,6 +656,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "Interiors, celebrity homes and gardens.",
                 0x1F3A5F,
                 fullTextInFeed = true,
+                archive = Archive.MonthlySitemap("https://www.homesandgardens.com/sitemap-{yyyy}-{MM}.xml"),
             ),
             Publication(
                 "dezeen-interiors",
@@ -607,6 +666,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "Dezeen's interior design stories.",
                 0x000000,
                 fullTextInFeed = true,
+                archive = Archive.FeedPages,
             ),
             Publication(
                 "designboom-interiors",
@@ -616,6 +676,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "Interior architecture and spaces.",
                 0xE2001A,
                 fullTextInFeed = true,
+                archive = Archive.FeedPages,
             ),
             Publication(
                 "design-milk",
@@ -625,6 +686,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "Modern design, furniture and interiors.",
                 0x00A9B5,
                 fullTextInFeed = true,
+                archive = Archive.FeedPages,
             ),
             Publication(
                 "domino",
@@ -643,6 +705,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "Sourcebook for the considered home.",
                 0x4A4A4A,
                 fullTextInFeed = true,
+                archive = Archive.FeedPages,
             ),
             Publication(
                 "the-spaces",
@@ -659,6 +722,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "https://www.sightunseen.com/feed/",
                 "Design, art and the people making them.",
                 0xF4A300,
+                archive = Archive.FeedPages,
             ),
         ),
     ),
@@ -687,7 +751,7 @@ object CustomPublications {
         } ?: "Stories from ${hostOf(homepage)}."
         val color = PALETTE[Math.floorMod(hostOf(homepage).hashCode(), PALETTE.size)]
         val token = encode(listOf(feed, name, homepage, shortTagline))
-        return Publication(PREFIX + token, name, homepage, feed, shortTagline, color)
+        return Publication(PREFIX + token, name, homepage, feed, shortTagline, color, archive = Archive.FeedPages)
     }
 
     /** The publication a "custom/<token>" slug stands for, or null if it isn't one. */
@@ -697,7 +761,7 @@ object CustomPublications {
         if (fields.size < 4) return null
         val (feed, name, homepage, tagline) = fields
         val color = PALETTE[Math.floorMod(hostOf(homepage).hashCode(), PALETTE.size)]
-        return Publication(slug, name, homepage, feed, tagline, color)
+        return Publication(slug, name, homepage, feed, tagline, color, archive = Archive.FeedPages)
     }
 
     fun hostOf(url: String) = url.substringAfter("://").substringBefore('/').removePrefix("www.")

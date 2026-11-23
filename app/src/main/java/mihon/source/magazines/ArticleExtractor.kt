@@ -288,7 +288,7 @@ object ArticleExtractor {
         val doc = Jsoup.parse(html, url)
         if (isBlockPage(doc)) throw BlockedException(url)
         val ldArticle = doc.ldArticle()
-        val title = item?.title
+        val title = item?.title?.ifBlank { null }
             ?: ldArticle?.string("headline")
             ?: doc.meta("og:title")
             ?: doc.title()

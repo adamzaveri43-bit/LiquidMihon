@@ -128,28 +128,16 @@ abstract class ModernMagazineSource(
         }
 
         val chapterList = if (fetchChapters) {
-            val known = chapters.associateBy { it.url }
-            val fresh = fetchFeed(publication).map { item ->
-                val chapter = item.toSChapter(publication)
-                // An undated story keeps the date it was first seen, so it doesn't jump to the top on every refresh.
-                val previous = known[chapter.url]
-                // Sitemap titles are made up from the address; keep the real one once it's known.
-                if (publication.kind == FeedKind.SITEMAP && previous != null) chapter.name = previous.name
-                if (item.date == null && previous != null) {
-                    chapter.date_upload = previous.date_upload
-                    chapter.scanlator = previous.scanlator
-                    chapter.chapter_number = previous.chapter_number
-                }
-                chapter
+            val latest = fetchFeed(publication)
+            // Older stories are a bonus: if the archive can't be reached, the latest ones still load.
+            val older = try {
+                fetchArchive(publication, known = chapters, latest = latest)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                emptyList()
             }
-            if (publication.kind == FeedKind.SITEMAP) {
-                fillInTitles(fresh.filter { known[it.url] == null }.take(MAX_TITLE_LOOKUPS))
-            }
-            val freshUrls = fresh.mapTo(HashSet()) { it.url }
-            // Keep older articles the feed no longer lists, so the back catalogue grows over time.
-            (fresh + chapters.filter { it.url !in freshUrls })
-                .sortedByDescending { it.date_upload }
-                .take(MAX_CHAPTERS)
+            mergeChapters(publication, chapters, latest + older)
         } else {
             chapters
         }
@@ -166,6 +154,104 @@ abstract class ModernMagazineSource(
         scanlator = monthLabel(millis)
         chapter_number = chapterNumber(millis)
     }
+
+    /**
+     * Existing chapters plus [items], newest first. Titles a listing had to make up from the address
+     * never replace a real one, and an undated story keeps the date it was first seen so it doesn't
+     * jump to the top on every refresh.
+     */
+    private suspend fun mergeChapters(
+        publication: Publication,
+        existing: List<SChapter>,
+        items: List<FeedItem>,
+    ): List<SChapter> {
+        val merged = LinkedHashMap<String, SChapter>()
+        existing.forEach { merged[it.url] = it }
+        for (item in items) {
+            val chapter = item.toSChapter(publication)
+            val previous = merged[chapter.url]
+            if (previous != null) {
+                if (hasMadeUpTitle(chapter) && !hasMadeUpTitle(previous)) chapter.name = previous.name
+                if (item.date == null) {
+                    chapter.date_upload = previous.date_upload
+                    chapter.scanlator = previous.scanlator
+                    chapter.chapter_number = previous.chapter_number
+                }
+            }
+            merged[chapter.url] = chapter
+        }
+        val chapters = merged.values.sortedByDescending { it.date_upload }.take(MAX_CHAPTERS)
+        // Fill in real headlines a batch at a time, newest first; later refreshes do the rest.
+        fillInTitles(chapters.filter(::hasMadeUpTitle).take(MAX_TITLE_LOOKUPS))
+        return chapters
+    }
+
+    private fun hasMadeUpTitle(chapter: SChapter): Boolean =
+        chapter.name.equals(ArticleExtractor.titleFromUrl(getChapterUrl(chapter)), ignoreCase = true)
+
+    /**
+     * Stories from just before the oldest one already known, so each refresh reaches a little
+     * further back: one more month of a monthly sitemap, or a few more pages of a paged feed.
+     */
+    private suspend fun fetchArchive(
+        publication: Publication,
+        known: List<SChapter>,
+        latest: List<FeedItem>,
+    ): List<FeedItem> {
+        val archive = publication.archive ?: return emptyList()
+        val oldest = (known.map { it.date_upload } + latest.mapNotNull { it.date }).filter { it > 0 }.minOrNull()
+            ?: System.currentTimeMillis()
+        // Pages hold as many stories as the first one; how many are known says roughly where they end.
+        val pageSize = latest.size.coerceAtLeast(1)
+        val knownCount = (known.map { getChapterUrl(it) } + latest.map { it.link }).toSet().size
+        val firstPage = maxOf(2, knownCount / pageSize + 1)
+        return when (archive) {
+            Archive.FeedPages -> fetchPages(firstPage) { page ->
+                val separator = if ('?' in publication.feed) '&' else '?'
+                val url = "${publication.feed}${separator}paged=$page"
+                ArticleExtractor.parseFeed(fetchText(url), url)
+            }
+            is Archive.ListingPages -> fetchPages(firstPage) { page ->
+                val url = archive.url(page)
+                ArticleExtractor.parseNextData(fetchText(url), url)
+            }
+            is Archive.MonthlySitemap -> {
+                // The oldest story's month (to fill it in) and the one before it (to reach further back)
+                val month = Instant.ofEpochMilli(oldest).atZone(ZoneOffset.UTC).toLocalDate().withDayOfMonth(1)
+                listOf(month, month.minusMonths(1)).flatMap { date ->
+                    try {
+                        ArticleExtractor.parseSitemap(fetchText(archive.url(date.year, date.monthValue)), Int.MAX_VALUE)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        emptyList()
+                    }
+                }.filter { item -> archive.pathFilter == null || archive.pathFilter in item.link }
+            }
+            Archive.FullSitemap -> ArticleExtractor.parseSitemap(fetchText(publication.feed), Int.MAX_VALUE)
+                .filter { (it.date ?: 0L) < oldest }
+                .take(SITEMAP_BACKFILL)
+        }
+    }
+
+    /** Up to [ARCHIVE_PAGES] pages from [firstPage], stopping at the first one that's empty or fails. */
+    private suspend fun fetchPages(firstPage: Int, load: suspend (Int) -> List<FeedItem>): List<FeedItem> {
+        val items = mutableListOf<FeedItem>()
+        for (page in firstPage until firstPage + ARCHIVE_PAGES) {
+            val pageItems = try {
+                load(page)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                break
+            }
+            if (pageItems.isEmpty()) break
+            items += pageItems
+        }
+        return items
+    }
+
+    private suspend fun fetchText(url: String): String = client.newCall(GET(url, headers)).awaitSuccess().bodyString()
 
     // ---- Pages ----------------------------------------------------------------------------------
 
@@ -193,7 +279,8 @@ abstract class ModernMagazineSource(
         if (fromFeed != null && ArticleExtractor.isComplete(fromFeed)) return fromFeed
 
         val fallback = item ?: FeedItem(
-            title = chapter.name,
+            // A title made up from the address is left out, so the page's own headline is used
+            title = chapter.name.takeUnless { hasMadeUpTitle(chapter) }.orEmpty(),
             link = link,
             date = chapter.date_upload.takeIf { it > 0 },
             author = null,
@@ -288,9 +375,11 @@ abstract class ModernMagazineSource(
     override fun getChapterUrl(chapter: SChapter): String = chapter.url.substringBefore('#')
 
     companion object {
-        private const val MAX_CHAPTERS = 400
+        private const val MAX_CHAPTERS = 3000
         private const val SITEMAP_ITEMS = 30
-        private const val MAX_TITLE_LOOKUPS = 30
+        private const val SITEMAP_BACKFILL = 60
+        private const val ARCHIVE_PAGES = 3
+        private const val MAX_TITLE_LOOKUPS = 24
         private const val TITLE_LOOKUP_BATCH = 6
 
         private val MONTH = DateTimeFormatter.ofPattern("MMMM yyyy", Locale.ENGLISH)
