@@ -8,10 +8,12 @@ import eu.kanade.tachiyomi.source.model.Page
 import eu.kanade.tachiyomi.ui.reader.loader.book.BookPage
 import eu.kanade.tachiyomi.ui.reader.loader.book.BookPageRenderer
 import eu.kanade.tachiyomi.ui.reader.loader.book.BookPageStyle
+import eu.kanade.tachiyomi.ui.reader.loader.book.EpubBook
 import eu.kanade.tachiyomi.ui.reader.loader.book.EpubBookParser
 import eu.kanade.tachiyomi.ui.reader.model.ReaderPage
 import eu.kanade.tachiyomi.ui.reader.setting.ReaderPreferences
 import eu.kanade.tachiyomi.util.system.readerBackgroundColor
+import kotlinx.coroutines.CancellationException
 import mihon.core.archive.EpubReader
 import java.util.Locale
 
@@ -30,16 +32,42 @@ internal class EpubPageLoader(
     override var isLocal: Boolean = true
 
     override suspend fun getPages(): List<ReaderPage> {
-        val book = EpubBookParser(reader).parse()
-        if (!book.isTextBook) return getImagePages()
+        if (isDrmProtected()) {
+            throw Exception(
+                "This EPUB is copy-protected (DRM), so only the store's own app can open it. " +
+                    "DRM-free EPUBs (Standard Ebooks, Project Gutenberg, many indie shops) open here.",
+            )
+        }
+        val book = try {
+            EpubBookParser(reader).parse()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Can't be read as a book (unusual packaging): show whatever images it has, if any
+            return getImagePages().ifEmpty {
+                throw Exception("This EPUB couldn't be read: ${e.message ?: e::class.simpleName}", e)
+            }
+        }
+        if (!book.isTextBook) {
+            return getImagePages().ifEmpty {
+                if (book.blocks.isEmpty()) throw Exception("This EPUB has no readable pages.")
+                textPages(book)
+            }
+        }
+        return textPages(book)
+    }
 
+    private fun textPages(book: EpubBook): List<ReaderPage> {
         val renderer = BookPageRenderer(bookPageStyle(book.language)) { reader.getInputStream(it) }
         val pages = renderer.paginate(book.blocks)
         return pages.mapIndexed { i, page ->
             ReaderPage(i).apply {
                 stream = when (page) {
                     is BookPage.Image -> {
-                        { reader.getInputStream(page.path)!! }
+                        {
+                            reader.getInputStream(page.path)
+                                ?: throw Exception("This picture is missing from the EPUB (${page.path}).")
+                        }
                     }
                     is BookPage.Text -> {
                         { renderer.render(i, page) }
@@ -51,9 +79,16 @@ internal class EpubPageLoader(
     }
 
     private fun getImagePages(): List<ReaderPage> {
-        return reader.getImagesFromPages().mapIndexed { i, path ->
+        val images = try {
+            reader.getImagesFromPages()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            emptyList()
+        }
+        return images.mapIndexed { i, path ->
             ReaderPage(i).apply {
-                stream = { reader.getInputStream(path)!! }
+                stream = { reader.getInputStream(path) ?: throw Exception("This picture is missing from the EPUB.") }
                 status = Page.State.Ready
             }
         }
@@ -91,6 +126,18 @@ internal class EpubPageLoader(
         return density * context.resources.configuration.fontScale
     }
 
+    /**
+     * Store-bought EPUBs are usually encrypted (Adobe, Readium LCP, Apple, Kobo): their content files can't be
+     * read without the store's keys. Fonts are sometimes obfuscated through encryption.xml too; that's fine.
+     */
+    private fun isDrmProtected(): Boolean {
+        if (reader.getInputStream("META-INF/rights.xml")?.use { true } == true) return true
+        val encryption = reader.getInputStream("META-INF/encryption.xml")?.use { it.reader().readText() }
+            ?: return false
+        val encrypted = CIPHER_REFERENCE.findAll(encryption).map { it.groupValues[1].lowercase() }.toList()
+        return encrypted.any { uri -> FONT_EXTENSIONS.none { uri.endsWith(it) } }
+    }
+
     override suspend fun loadPage(page: ReaderPage) {
         check(!isRecycled)
     }
@@ -102,5 +149,7 @@ internal class EpubPageLoader(
 
     private companion object {
         const val VERTICAL_MARGIN = 0.05f
+        val FONT_EXTENSIONS = listOf(".ttf", ".otf", ".woff", ".woff2")
+        val CIPHER_REFERENCE = Regex("""CipherReference[^>]*URI\s*=\s*"([^"]+)"""")
     }
 }

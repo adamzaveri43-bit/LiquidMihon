@@ -125,6 +125,8 @@ interface AppGraph : ViewModelGraph {
 
     val getExtensionStoreCountAsFlow: GetExtensionStoreCountAsFlow
 
+    val bookImporter: mihon.feature.books.BookImporter
+
     @DependencyGraph.Factory
     fun interface Factory {
         fun create(@Provides context: Context, @Provides @IsDebugBuild isDebugBuild: Boolean): AppGraph

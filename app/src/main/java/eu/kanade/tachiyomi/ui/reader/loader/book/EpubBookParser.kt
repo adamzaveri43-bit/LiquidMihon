@@ -95,7 +95,9 @@ internal class EpubBookParser(private val epub: EpubReader) {
 
     fun parse(): EpubBook {
         epub.getPageDocumentPaths().forEach { path ->
-            val document = epub.getInputStream(path)?.use { Jsoup.parse(it, null, "") } ?: return@forEach
+            // A chapter that can't be read is skipped rather than failing the whole book
+            val document = runCatching { epub.getInputStream(path)?.use { Jsoup.parse(it, null, "") } }
+                .getOrNull() ?: return@forEach
             if (blocks.isNotEmpty() && blocks.last() != BookBlock.PageBreak) {
                 blocks += BookBlock.PageBreak
             }

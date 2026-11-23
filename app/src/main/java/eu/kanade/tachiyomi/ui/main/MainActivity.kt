@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
@@ -96,6 +97,7 @@ import eu.kanade.tachiyomi.ui.setting.SettingsScreen
 import eu.kanade.tachiyomi.util.system.dpToPx
 import eu.kanade.tachiyomi.util.system.isBenchmarkBuildType
 import eu.kanade.tachiyomi.util.system.isNavigationBarNeedsScrim
+import eu.kanade.tachiyomi.util.system.toast
 import eu.kanade.tachiyomi.util.system.updaterEnabled
 import eu.kanade.tachiyomi.util.view.setComposeContent
 import kotlinx.coroutines.CancellationException
@@ -601,6 +603,14 @@ class MainActivity : BaseActivity() {
             )
         }
 
+        // An EPUB or PDF opened or shared from another app: add it to the library and open it
+        val bookUri = intent.bookUri()
+        if (bookUri != null && appGraph.bookImporter.canImport(bookUri, intent.type)) {
+            importBook(bookUri, intent.type, navigator)
+            ready = true
+            return true
+        }
+
         val tabToOpen = when (intent.action) {
             Constants.SHORTCUT_LIBRARY -> HomeScreen.Tab.Library()
             Constants.SHORTCUT_MANGA -> {
@@ -666,6 +676,28 @@ class MainActivity : BaseActivity() {
 
         ready = true
         return true
+    }
+
+    /** The file an "open with" or "share" intent carries, if any. */
+    @Suppress("DEPRECATION")
+    private fun Intent.bookUri(): Uri? = when (action) {
+        Intent.ACTION_VIEW -> data
+        Intent.ACTION_SEND -> getParcelableExtra(Intent.EXTRA_STREAM) as? Uri
+        else -> null
+    }
+
+    private fun importBook(uri: Uri, mimeType: String?, navigator: Navigator) {
+        lifecycleScope.launch {
+            try {
+                val mangaId = appGraph.bookImporter.import(uri, mimeType)
+                navigator.popUntilRoot()
+                navigator.push(MangaScreen(mangaId))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                toast(e.message ?: "Couldn't open this book.")
+            }
+        }
     }
 
     private fun Intent.isAddExtensionStoreIntent(): Boolean {
