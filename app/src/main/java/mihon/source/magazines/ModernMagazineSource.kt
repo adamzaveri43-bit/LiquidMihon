@@ -12,6 +12,9 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -130,12 +133,17 @@ abstract class ModernMagazineSource(
                 val chapter = item.toSChapter(publication)
                 // An undated story keeps the date it was first seen, so it doesn't jump to the top on every refresh.
                 val previous = known[chapter.url]
+                // Sitemap titles are made up from the address; keep the real one once it's known.
+                if (publication.kind == FeedKind.SITEMAP && previous != null) chapter.name = previous.name
                 if (item.date == null && previous != null) {
                     chapter.date_upload = previous.date_upload
                     chapter.scanlator = previous.scanlator
                     chapter.chapter_number = previous.chapter_number
                 }
                 chapter
+            }
+            if (publication.kind == FeedKind.SITEMAP) {
+                fillInTitles(fresh.filter { known[it.url] == null }.take(MAX_TITLE_LOOKUPS))
             }
             val freshUrls = fresh.mapTo(HashSet()) { it.url }
             // Keep older articles the feed no longer lists, so the back catalogue grows over time.
@@ -174,7 +182,8 @@ abstract class ModernMagazineSource(
         // The feed often has the whole article (and is cheaper than the web page); look there first.
         val link = getChapterUrl(chapter)
         val item = try {
-            fetchFeed(publication).find { sameArticle(it.link, link) }
+            // Feed substitutes carry no article text, so there's nothing to look up there.
+            if (publication.kind != FeedKind.RSS) null else fetchFeed(publication).find { sameArticle(it.link, link) }
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
@@ -214,9 +223,32 @@ abstract class ModernMagazineSource(
 
     private suspend fun fetchFeed(publication: Publication): List<FeedItem> {
         val response = client.newCall(GET(publication.feed, headers)).awaitSuccess()
-        val items = ArticleExtractor.parseFeed(response.bodyString(), publication.feed)
+        val body = response.bodyString()
+        val items = when (publication.kind) {
+            FeedKind.RSS -> ArticleExtractor.parseFeed(body, publication.feed)
+            FeedKind.SITEMAP -> ArticleExtractor.parseSitemap(body, limit = SITEMAP_ITEMS)
+            FeedKind.NEXT_DATA -> ArticleExtractor.parseNextData(body, publication.feed)
+        }
         if (items.isEmpty()) throw Exception("${publication.name}'s feed had no stories. Try again later.")
         return items
+    }
+
+    /** Replaces made-up titles with each article's own headline, a few pages at a time. */
+    private suspend fun fillInTitles(chapters: List<SChapter>) = coroutineScope {
+        chapters.chunked(TITLE_LOOKUP_BATCH).forEach { batch ->
+            batch.map { chapter ->
+                async {
+                    try {
+                        val html = client.newCall(GET(getChapterUrl(chapter), headers)).awaitSuccess().bodyString()
+                        ArticleExtractor.pageTitle(html)?.let { chapter.name = it }
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        // Keep the title made from the address.
+                    }
+                }
+            }.awaitAll()
+        }
     }
 
     protected fun Response.bodyString(): String = use { it.body.string() }
@@ -257,6 +289,9 @@ abstract class ModernMagazineSource(
 
     companion object {
         private const val MAX_CHAPTERS = 400
+        private const val SITEMAP_ITEMS = 30
+        private const val MAX_TITLE_LOOKUPS = 30
+        private const val TITLE_LOOKUP_BATCH = 6
 
         private val MONTH = DateTimeFormatter.ofPattern("MMMM yyyy", Locale.ENGLISH)
         private val EPOCH_2000: Long = LocalDate.of(2000, 1, 1).toEpochDay()

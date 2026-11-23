@@ -101,6 +101,92 @@ object ArticleExtractor {
         }
     }
 
+    // ---- Feed substitutes, for sites without RSS -------------------------------------------------
+
+    /**
+     * Articles from a sitemap (`<urlset>`), newest first. Sitemaps have no titles, so each item
+     * gets one made from its address until the article itself is read.
+     */
+    fun parseSitemap(xml: String, limit: Int): List<FeedItem> {
+        val doc = Jsoup.parse(xml, "", Parser.xmlParser())
+        return doc.getElementsByTag("url").mapNotNull { url ->
+            val loc = url.childText("loc")?.takeIf { it.startsWith("http") } ?: return@mapNotNull null
+            FeedItem(
+                title = titleFromUrl(loc),
+                link = loc,
+                date = parseDate(url.childText("lastmod")),
+                author = null,
+                imageUrl = url.getElementsByTag("image:loc").firstOrNull()?.text()?.trim()?.ifBlank { null },
+                summary = null,
+                contentHtml = null,
+            )
+        }
+            .sortedByDescending { it.date ?: 0L }
+            .take(limit)
+    }
+
+    /**
+     * Articles listed in a Next.js page's `__NEXT_DATA__`: any object with a title, a link and a
+     * date (sites built this way often have no feed but ship their story lists as JSON).
+     */
+    fun parseNextData(html: String, pageUrl: String): List<FeedItem> {
+        val data = Jsoup.parse(html, pageUrl).selectFirst("script#__NEXT_DATA__")?.data() ?: return emptyList()
+        val root = runCatching { json.parseToJsonElement(data) }.getOrNull() ?: return emptyList()
+        val base = runCatching { java.net.URI(pageUrl) }.getOrNull() ?: return emptyList()
+        val items = LinkedHashMap<String, FeedItem>()
+        fun walk(element: JsonElement) {
+            when (element) {
+                is JsonArray -> element.forEach(::walk)
+                is JsonObject -> {
+                    val title = element.string("title") ?: element.string("headline")
+                    val path = LINK_KEYS.firstNotNullOfOrNull { element.string(it) }
+                        ?.takeIf { it.startsWith("/") || it.startsWith("http") }
+                    val date = DATE_KEYS.firstNotNullOfOrNull { element.string(it) }?.let(::parseDate)
+                    if (title != null && path != null && date != null) {
+                        val link = base.resolve(path).toString()
+                        items.getOrPut(link) {
+                            FeedItem(
+                                title = cleanText(title),
+                                link = link,
+                                date = date,
+                                author = null,
+                                imageUrl = IMAGE_KEYS.firstNotNullOfOrNull { element.string(it) }
+                                    ?.let { base.resolve(it.replace(" ", "%20")).toString() },
+                                summary = element.string("description") ?: element.string("summary"),
+                                contentHtml = null,
+                            )
+                        }
+                    }
+                    element.values.forEach(::walk)
+                }
+                else -> Unit
+            }
+        }
+        walk(root)
+        return items.values.sortedByDescending { it.date ?: 0L }
+    }
+
+    /** "…/love-it-or-hate-it-li-auto/2771868" -> "Love it or hate it li auto". */
+    fun titleFromUrl(url: String): String {
+        val segment = url.substringBefore('?').trimEnd('/').split('/')
+            .lastOrNull { part -> part.any { it.isLetter() } }
+            .orEmpty()
+            .substringBeforeLast(".htm")
+        val words = segment.replace('-', ' ').replace('_', ' ').trim()
+        return words.replaceFirstChar { it.uppercase() }.ifBlank { url }
+    }
+
+    /** The headline a page gives itself, for filling in titles a listing didn't have. */
+    fun pageTitle(html: String): String? {
+        val doc = Jsoup.parse(html)
+        return (doc.meta("og:title") ?: doc.ldArticle()?.string("headline") ?: doc.title().ifBlank { null })
+            ?.let(::cleanText)
+    }
+
+    private val LINK_KEYS = listOf("path", "url", "href", "link")
+    private val DATE_KEYS = listOf("created", "datePublished", "publishedAt", "published", "date", "firstPublished")
+    private val IMAGE_KEYS = listOf("image", "imageUrl", "thumbnail", "thumbnailUrl")
+
     /** A feed's own name, description and site, or null if [xml] isn't a feed with stories in it. */
     fun parseFeedInfo(xml: String, feedUrl: String): FeedInfo? {
         val doc = Jsoup.parse(xml, feedUrl, Parser.xmlParser())
@@ -226,7 +312,12 @@ object ArticleExtractor {
             htmlLength > 0 -> fromHtml
             else -> item?.summary?.let { blocksOf(Jsoup.parseBodyFragment(it, url).body()) }.orEmpty()
         }
-        return Article(title.ifBlank { url }, author, date, leadImage, blocks)
+        // Pages often repeat the headline (and a section label) at the top of the body; the header already has it.
+        val headline = title.trim()
+        val body = blocks.withIndex()
+            .filterNot { (i, block) -> i < HEADLINE_SEARCH && block !is ArticleBlock.Image && block.text() == headline }
+            .map { it.value }
+        return Article(title.ifBlank { url }, author, date, leadImage, body)
     }
 
     /** True for bot checks and "access denied" pages served instead of the article. */
@@ -475,6 +566,7 @@ object ArticleExtractor {
     private val EMAIL_WITH_NAME = Regex("""\S+@\S+\s*\((.+)\)""")
 
     private const val BLOCK_PAGE_MAX = 3000
+    private const val HEADLINE_SEARCH = 4
 
     private val BLOCK_PAGE = Regex(
         "access (to this page )?(has been )?denied|why have i been blocked|are you a robot|just a moment\\.\\.\\.|" +
@@ -506,7 +598,7 @@ object ArticleExtractor {
             "read (the )?full (article|story)|updated:|readtime:|image credits)|" +
             "we may earn (a )?commission|may receive a commission|editor-tested|independently selected|" +
             "affiliate (link|marketing)|the post .* (appeared first|first appeared) on|" +
-            "unlock premium|unlimited access to|" +
+            "unlock premium|unlimited access to|magazine subscription|" +
             "become a .{0,30}member|follow .{0,30} to ensure|please enable js|disable any ad ?blocker",
         RegexOption.IGNORE_CASE,
     )

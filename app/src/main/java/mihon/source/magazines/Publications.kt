@@ -7,6 +7,7 @@ package mihon.source.magazines
  * @param feed the publication's feed; entries are rebuilt from it on every refresh
  * @param fullTextInFeed true when the feed carries whole articles, so article pages needn't be fetched
  * @param color masthead background for the generated cover, as 0xRRGGBB
+ * @param kind what [feed] points at: an RSS/Atom feed, or a substitute for sites that have none
  */
 data class Publication(
     val slug: String,
@@ -16,7 +17,20 @@ data class Publication(
     val tagline: String,
     val color: Int,
     val fullTextInFeed: Boolean = false,
+    val kind: FeedKind = FeedKind.RSS,
 )
+
+/** Where a publication's list of stories comes from. */
+enum class FeedKind {
+    /** An RSS or Atom feed. */
+    RSS,
+
+    /** A sitemap listing the site's articles; titles are read from the articles themselves. */
+    SITEMAP,
+
+    /** A Next.js page whose embedded data lists the latest stories. */
+    NEXT_DATA,
+}
 
 /** A group of publications, shown as its own built-in source. */
 enum class MagazineCategory(val title: String, val publications: List<Publication>) {
@@ -238,6 +252,24 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "https://electrek.co/feed/",
                 "Electric vehicles and clean transport.",
                 0x1E73BE,
+            ),
+            Publication(
+                "top-gear",
+                "Top Gear",
+                "https://www.topgear.com",
+                "https://www.topgear.com/car-news",
+                "Car news, reviews, supercars and concepts.",
+                0x00A0DF,
+                kind = FeedKind.NEXT_DATA,
+            ),
+            Publication(
+                "car-design-news",
+                "Car Design News",
+                "https://www.cardesignnews.com",
+                "https://www.cardesignnews.com/sitemap.xml",
+                "Concept cars, interiors and the designers behind them.",
+                0x1A1A1A,
+                kind = FeedKind.SITEMAP,
             ),
             Publication(
                 "new-atlas-auto",

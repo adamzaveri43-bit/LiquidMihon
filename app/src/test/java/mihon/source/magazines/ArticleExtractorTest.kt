@@ -167,4 +167,46 @@ class ArticleExtractorTest {
             ArticleExtractor.fromPage(html, "https://blocked.example/story", item = null)
         }
     }
+
+    @Test
+    fun `lists articles from a sitemap, newest first, with titles from their addresses`() {
+        val xml = """
+            <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+              <url><loc>https://cdn.example/cars/older-concept-reveal/100</loc><lastmod>2026-11-19T18:29+01:00</lastmod></url>
+              <url>
+                <loc>https://cdn.example/designers/love-it-or-hate-it-li-auto/200</loc>
+                <lastmod>2026-11-20T11:06+01:00</lastmod>
+                <image:image><image:loc>https://img.cdn.example/200.jpg</image:loc></image:image>
+              </url>
+            </urlset>
+        """.trimIndent()
+
+        val items = ArticleExtractor.parseSitemap(xml, limit = 10)
+
+        items.map { it.title } shouldContainExactly listOf("Love it or hate it li auto", "Older concept reveal")
+        items.first().imageUrl shouldBe "https://img.cdn.example/200.jpg"
+        items.first().date shouldBe 1795169160000L
+    }
+
+    @Test
+    fun `lists stories embedded in a Next js page`() {
+        val html = """
+            <html><body><script id="__NEXT_DATA__" type="application/json">
+            {"props":{"pageProps":{"nav":[{"title":"Electric","path":"/car-news/electric"}],
+             "newsResults":{"results":[
+               {"title":"New concept","path":"/car-news/electric/new-concept","created":"2026-11-20T17:10:00+00:00",
+                "image":"/files/concept.jpg","description":"A first look",
+                "categories":[{"title":"Electric","path":"/car-news/electric"}]},
+               {"title":"Supercar","path":"/car-news/supercars/supercar","created":"2026-11-21T22:00:00+00:00"}
+             ]}}}}
+            </script></body></html>
+        """.trimIndent()
+
+        val items = ArticleExtractor.parseNextData(html, "https://www.topgear.com/car-news")
+
+        items.map { it.title } shouldContainExactly listOf("Supercar", "New concept")
+        items.last().link shouldBe "https://www.topgear.com/car-news/electric/new-concept"
+        items.last().imageUrl shouldBe "https://www.topgear.com/files/concept.jpg"
+        items.last().summary shouldBe "A first look"
+    }
 }
