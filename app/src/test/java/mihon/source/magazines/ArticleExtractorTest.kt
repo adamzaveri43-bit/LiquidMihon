@@ -1,0 +1,159 @@
+package mihon.source.magazines
+
+import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.nulls.shouldBeNull
+import io.kotest.matchers.nulls.shouldNotBeNull
+import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
+import org.junit.jupiter.api.Test
+
+class ArticleExtractorTest {
+
+    @Test
+    fun `reads RSS items with full content, media images and dates`() {
+        val xml = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/"
+                 xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:media="http://search.yahoo.com/mrss/">
+              <channel>
+                <title>Cars</title>
+                <item>
+                  <title>The new &amp; improved concept</title>
+                  <link>https://cars.example/concept</link>
+                  <pubDate>Sun, 22 Nov 2026 16:00:00 +0000</pubDate>
+                  <dc:creator>staff@cars.example (Jane Doe)</dc:creator>
+                  <media:content url="https://img.example/lead.jpg" medium="image"/>
+                  <description>Short summary</description>
+                  <content:encoded><![CDATA[<p>First paragraph of the story.</p><p>Second.</p>]]></content:encoded>
+                </item>
+              </channel>
+            </rss>
+        """.trimIndent()
+
+        val item = ArticleExtractor.parseFeed(xml, "https://cars.example/feed").single()
+
+        item.title shouldBe "The new & improved concept"
+        item.link shouldBe "https://cars.example/concept"
+        item.date shouldBe 1795363200000L
+        item.author shouldBe "Jane Doe"
+        item.imageUrl shouldBe "https://img.example/lead.jpg"
+        item.contentHtml.shouldNotBeNull() shouldContain "First paragraph"
+    }
+
+    @Test
+    fun `reads Atom entries, including namespaced dates`() {
+        val xml = """
+            <rss xmlns:a10="http://www.w3.org/2005/Atom"><channel>
+              <item><title>Roundup</title><link>https://d.example/a</link>
+                <a10:updated>2026-11-20T11:00:00-05:00</a10:updated></item>
+            </channel></rss>
+        """.trimIndent()
+        ArticleExtractor.parseFeed(xml, "https://d.example/").single().date shouldBe 1795190400000L
+
+        val atom = """
+            <feed xmlns="http://www.w3.org/2005/Atom">
+              <entry>
+                <title>Atom story</title>
+                <link rel="alternate" href="https://atom.example/story"/>
+                <published>2026-11-22T10:00:00Z</published>
+                <author><name>Sam</name></author>
+                <content type="html">&lt;p&gt;Body&lt;/p&gt;</content>
+              </entry>
+            </feed>
+        """.trimIndent()
+        val entry = ArticleExtractor.parseFeed(atom, "https://atom.example/").single()
+        entry.link shouldBe "https://atom.example/story"
+        entry.author shouldBe "Sam"
+        entry.contentHtml.shouldNotBeNull() shouldContain "<p>Body</p>"
+    }
+
+    @Test
+    fun `keeps text and pictures in reading order and drops boilerplate`() {
+        val html = """
+            <div>
+              <p>Our product picks are editor-tested, expert-approved. We may earn a commission.</p>
+              <h2>The design</h2>
+              <p>The concept has a long, low nose.</p>
+              <figure><img src="https://img.example/side.jpg" width="1200"><figcaption>Side view</figcaption></figure>
+              <img src="https://img.example/logo.png">
+              <img src="https://img.example/tiny.jpg" width="40">
+              <ul><li>500 hp</li><li>Rear-wheel drive</li></ul>
+              <blockquote>It drives like nothing else.</blockquote>
+              <p>Read the full article</p>
+            </div>
+        """.trimIndent()
+        val blocks = ArticleExtractor.blocksOf(org.jsoup.Jsoup.parseBodyFragment(html).body())
+
+        blocks shouldContainExactly listOf(
+            ArticleBlock.Heading("The design"),
+            ArticleBlock.Paragraph("The concept has a long, low nose."),
+            ArticleBlock.Image("https://img.example/side.jpg"),
+            ArticleBlock.Caption("Side view"),
+            ArticleBlock.ListItem("500 hp"),
+            ArticleBlock.ListItem("Rear-wheel drive"),
+            ArticleBlock.Quote("It drives like nothing else."),
+        )
+    }
+
+    @Test
+    fun `finds the article body on a web page and ignores navigation`() {
+        val body = (1..6).joinToString("") { "<p>Paragraph $it of the review, long enough to count as body text.</p>" }
+        val html = """
+            <html><head>
+              <meta property="og:image" content="https://img.example/og.jpg">
+              <meta property="og:title" content="Page title">
+            </head><body>
+              <nav><p>Home, News, Reviews and every other section of the site in one long line.</p></nav>
+              <div class="sidebar"><p>Most popular stories this week, which should not be in the article.</p></div>
+              <article><div class="article-body">$body</div></article>
+              <footer><p>Copyright and a very long footer line that should never be read as content.</p></footer>
+            </body></html>
+        """.trimIndent()
+
+        val article = ArticleExtractor.fromPage(html, "https://cars.example/review", item = null)
+
+        article.title shouldBe "Page title"
+        article.leadImage shouldBe "https://img.example/og.jpg"
+        article.blocks.size shouldBe 6
+        article.blocks.joinToString { it.text() }.apply {
+            shouldNotContain("Most popular")
+            shouldNotContain("Copyright")
+        }
+    }
+
+    @Test
+    fun `uses JSON-LD articleBody when the page splits its body up, and restores paragraphs`() {
+        val sentences = (1..40).joinToString("") { "Sentence number $it is here." }
+        val html = """
+            <html><head><script type="application/ld+json">
+              {"@context":"https://schema.org","@type":"NewsArticle","headline":"LD headline",
+               "author":{"@type":"Person","name":"Alex"},"articleBody":"$sentences"}
+            </script></head>
+            <body><div><p>Only a short teaser paragraph is in the HTML.</p></div></body></html>
+        """.trimIndent()
+
+        val article = ArticleExtractor.fromPage(html, "https://mag.example/story", item = null)
+
+        article.author shouldBe "Alex"
+        (article.blocks.size > 1) shouldBe true
+        article.blocks.first().text() shouldContain "Sentence number 1 is here."
+        article.textLength shouldBe article.blocks.sumOf { it.text().length }
+    }
+
+    @Test
+    fun `treats short or trailing-off feed copies as incomplete`() {
+        val short = Article("t", null, null, null, listOf(ArticleBlock.Paragraph("Just a teaser…")))
+        ArticleExtractor.isComplete(short) shouldBe false
+
+        val long = Article("t", null, null, null, listOf(ArticleBlock.Paragraph("x".repeat(2500))))
+        ArticleExtractor.isComplete(long) shouldBe true
+
+        val withLead = short.copy(leadImage = "https://img.example/a.jpg")
+        val picked = ArticleExtractor.pick(withLead, long).shouldNotBeNull()
+        picked.textLength shouldBe 2500
+        picked.leadImage shouldBe "https://img.example/a.jpg"
+
+        ArticleExtractor.pick(null, null).shouldBeNull()
+    }
+}

@@ -20,6 +20,12 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import mihon.source.magazines.ArtMagazines
+import mihon.source.magazines.CarMagazines
+import mihon.source.magazines.DesignMagazines
+import mihon.source.magazines.MensStyleMagazines
+import mihon.source.magazines.ModernMagazineSource
+import mihon.source.magazines.TechMagazines
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Response
 import org.jsoup.Jsoup
@@ -389,8 +395,21 @@ class InternetArchiveBooks : InternetArchiveSource() {
 
 /** Built-in online sources that ship with the app, alongside the local source. */
 object BuiltinSources {
-    val all: List<InternetArchiveSource> by lazy { listOf(InternetArchiveMagazines(), InternetArchiveBooks()) }
+    private val archive: List<InternetArchiveSource> by lazy {
+        listOf(InternetArchiveMagazines(), InternetArchiveBooks())
+    }
+
+    /** Current magazines from the publishers' own feeds. */
+    private val magazines: List<ModernMagazineSource> by lazy {
+        listOf(MensStyleMagazines(), CarMagazines(), DesignMagazines(), ArtMagazines(), TechMagazines())
+    }
+
+    val all: List<HttpSource> by lazy { magazines + archive }
+
+    private val contentTypes: Map<Long, LibraryContentType> by lazy {
+        archive.associate { it.id to it.contentType } + magazines.associate { it.id to it.contentType }
+    }
 
     /** Content type for entries from a built-in source, or null if the source isn't one of them. */
-    fun contentTypeOf(sourceId: Long): LibraryContentType? = all.find { it.id == sourceId }?.contentType
+    fun contentTypeOf(sourceId: Long): LibraryContentType? = contentTypes[sourceId]
 }
