@@ -29,7 +29,9 @@ import dev.zacsweers.metrox.viewmodel.metroViewModel
 import eu.kanade.presentation.category.components.ChangeCategoryDialog
 import eu.kanade.presentation.library.DeleteLibraryMangaDialog
 import eu.kanade.presentation.library.LibrarySettingsDialog
+import eu.kanade.presentation.library.SetContentTypeDialog
 import eu.kanade.presentation.library.components.LibraryContent
+import eu.kanade.presentation.library.components.LibraryContentTypeBar
 import eu.kanade.presentation.library.components.LibraryToolbar
 import eu.kanade.presentation.manga.components.LibraryBottomActionMenu
 import eu.kanade.presentation.more.onboarding.GETTING_STARTED_URL
@@ -120,6 +122,7 @@ data object LibraryTab : Tab {
                     onClickUnselectAll = viewModel::clearSelection,
                     onClickSelectAll = viewModel::selectAll,
                     onClickInvertSelection = viewModel::invertSelection,
+                    onClickSetContentType = viewModel::openSetContentTypeDialog,
                     onClickFilter = viewModel::showSettingsDialog,
                     onClickRefresh = { scope.launch { onClickRefresh(state.activeCategory) } },
                     onClickGlobalUpdate = { scope.launch { onClickRefresh(null) } },
@@ -184,7 +187,8 @@ data object LibraryTab : Tab {
                         selection = state.selection,
                         contentPadding = contentPadding,
                         currentPage = state.coercedActiveCategoryIndex,
-                        hasActiveFilters = state.hasActiveFilters,
+                        // A picked section can leave a category empty; show "no matches" instead of "empty"
+                        hasActiveFilters = state.hasActiveFilters || state.libraryData.contentType != null,
                         showPageTabs = state.showCategoryTabs || !state.searchQuery.isNullOrEmpty(),
                         onChangeCurrentPage = viewModel::updateActiveCategoryIndex,
                         onClickManga = { navigator.push(MangaScreen(it)) },
@@ -214,6 +218,15 @@ data object LibraryTab : Tab {
                         getDisplayMode = { viewModel.getDisplayMode() },
                         getColumnsForOrientation = { viewModel.getColumnsForOrientation(it) },
                         getItemsForCategory = { state.getItemsForCategory(it) },
+                        contentTypeBar = {
+                            if (!state.selectionMode) {
+                                LibraryContentTypeBar(
+                                    selected = state.libraryData.contentType,
+                                    counts = state.libraryData.contentTypeCounts,
+                                    onSelect = viewModel::setContentTypeFilter,
+                                )
+                            }
+                        },
                     )
                 }
             }
@@ -248,6 +261,16 @@ data object LibraryTab : Tab {
                     onDismissRequest = onDismissRequest,
                     onConfirm = { deleteManga, deleteChapter ->
                         viewModel.removeMangas(dialog.manga, deleteManga, deleteChapter)
+                        viewModel.clearSelection()
+                    },
+                )
+            }
+            is LibraryViewModel.Dialog.SetContentType -> {
+                SetContentTypeDialog(
+                    initial = dialog.current,
+                    onDismissRequest = onDismissRequest,
+                    onConfirm = { type ->
+                        viewModel.setContentType(dialog.manga, type)
                         viewModel.clearSelection()
                     },
                 )

@@ -7,6 +7,7 @@ import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.preference.TriState
 import tachiyomi.core.common.preference.getEnum
+import tachiyomi.domain.library.model.LibraryContentType
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.domain.library.model.LibrarySort
 import tachiyomi.domain.manga.model.Manga
@@ -72,6 +73,15 @@ class LibraryPreferences(
     )
 
     // region Filter
+
+    /** Library section being shown: one of [LibraryContentType] names, or empty for everything. */
+    val contentTypeFilter: Preference<String> = preferenceStore.getString("pref_library_content_type_filter", "")
+
+    /** Per-entry content type the user picked by hand, as "mangaId:TYPE". */
+    val contentTypeOverrides: Preference<Set<String>> = preferenceStore.getStringSet(
+        "pref_library_content_type_overrides",
+        emptySet(),
+    )
 
     val filterDownloaded: Preference<TriState> = preferenceStore.getEnum(
         "pref_filter_library_downloaded_v2",

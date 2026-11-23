@@ -49,8 +49,10 @@ import mihon.core.common.utils.mutate
 import mihon.core.metro.AppCoroutineScope
 import mihon.domain.library.model.search.QueryNode
 import mihon.feature.library.matches
+import mihon.source.archive.BuiltinSources
 import tachiyomi.core.common.preference.CheckboxState
 import tachiyomi.core.common.preference.TriState
+import tachiyomi.core.common.preference.getAndSet
 import tachiyomi.core.common.util.lang.SubscriberGate
 import tachiyomi.core.common.util.lang.compareToWithCollator
 import tachiyomi.core.common.util.lang.pausedWhileUnsubscribed
@@ -61,6 +63,7 @@ import tachiyomi.domain.chapter.interactor.GetBookmarkedChaptersByMangaId
 import tachiyomi.domain.chapter.interactor.GetChaptersByMangaId
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.history.interactor.GetNextChapters
+import tachiyomi.domain.library.model.LibraryContentType
 import tachiyomi.domain.library.model.LibraryDisplayMode
 import tachiyomi.domain.library.model.LibraryManga
 import tachiyomi.domain.library.model.LibrarySort
@@ -110,6 +113,11 @@ class LibraryViewModel(
 
     private val activeCategoryIndex = MutableStateFlow(libraryPreferences.lastUsedCategory.get())
 
+    /** Library section being shown, or null for everything. */
+    private val contentTypeFilter = libraryPreferences.contentTypeFilter.changes()
+        .map { raw -> LibraryContentType.entries.find { it.name == raw } }
+        .distinctUntilChanged()
+
     private val displayPreferences = combine(
         libraryPreferences.categoryTabs.changes(),
         libraryPreferences.categoryNumberOfItems.changes(),
@@ -150,10 +158,10 @@ class LibraryViewModel(
         getCategories.subscribe(),
         getFavoritesFlow(),
         combine(tracks, getTrackingFiltersFlow(), ::Pair),
-        getLibraryItemPreferencesFlow(),
-    ) { searchQuery, categories, favorites, (tracksMap, trackingFilters), itemPreferences ->
+        combine(getLibraryItemPreferencesFlow(), contentTypeFilter, ::Pair),
+    ) { searchQuery, categories, favorites, (tracksMap, trackingFilters), (itemPreferences, contentType) ->
         val showSystemCategory = favorites.any { it.libraryManga.categories.contains(0) }
-        val filteredFavorites = favorites
+        val matchingFavorites = favorites
             .applyFilters(tracksMap, trackingFilters, itemPreferences)
             .let { libraryItems ->
                 if (searchQuery.isNullOrEmpty()) {
@@ -163,6 +171,14 @@ class LibraryViewModel(
                     libraryItems.filter { queryNode.matches(it) }
                 }
             }
+        val contentTypeCounts = LibraryContentType.entries.associateWith { type ->
+            matchingFavorites.count { it.contentType == type }
+        }
+        val filteredFavorites = if (contentType == null) {
+            matchingFavorites
+        } else {
+            matchingFavorites.fastFilter { it.contentType == contentType }
+        }
 
         LibraryData(
             isInitialized = true,
@@ -171,6 +187,9 @@ class LibraryViewModel(
             favorites = filteredFavorites,
             tracksMap = tracksMap,
             loggedInTrackerIds = trackingFilters.keys,
+            contentType = contentType,
+            contentTypeCounts = contentTypeCounts,
+            totalFavoriteCount = favorites.size,
         )
     }
         .distinctUntilChanged()
@@ -419,7 +438,8 @@ class LibraryViewModel(
             getLibraryManga.subscribe(),
             getLibraryItemPreferencesFlow(),
             downloadCache.changes.pausedWhileUnsubscribed(),
-        ) { libraryManga, preferences, _ ->
+            libraryPreferences.contentTypeOverrides.changes().map(LibraryContentType::decodeOverrides),
+        ) { libraryManga, preferences, _, contentTypeOverrides ->
             val sources = libraryManga
                 .mapTo(mutableSetOf()) { it.manga.source }
                 .associateWith { sourceManager.getOrStub(it) }
@@ -434,6 +454,11 @@ class LibraryViewModel(
                     isLocal = manga.manga.isLocal(),
                     sourceName = source.name.lowercase(),
                     sourceLanguage = source.lang,
+                    contentType = LibraryContentType.classify(
+                        override = contentTypeOverrides[manga.id],
+                        sourceType = BuiltinSources.contentTypeOf(manga.manga.source),
+                        genres = manga.manga.genre,
+                    ),
                     badges = LibraryItem.Badges(
                         downloadCount = if (preferences.downloadBadge) {
                             downloadCount
@@ -744,6 +769,31 @@ class LibraryViewModel(
         dialog.update { Dialog.DeleteManga(selectedManga) }
     }
 
+    fun setContentTypeFilter(type: LibraryContentType?) {
+        libraryPreferences.contentTypeFilter.set(type?.name.orEmpty())
+    }
+
+    fun openSetContentTypeDialog() {
+        val state = state.value
+        val mangaList = state.selectedManga
+        // Preselect a type only when every selected entry was filed under the same one by hand
+        val overrides = LibraryContentType.decodeOverrides(libraryPreferences.contentTypeOverrides.get())
+        val current = state.selection.map { overrides[it] }.distinct().singleOrNull()
+        dialog.value = Dialog.SetContentType(mangaList, current)
+    }
+
+    /**
+     * Files the given entries under [type], or back under their automatic type when [type] is null.
+     */
+    fun setContentType(mangaList: List<Manga>, type: LibraryContentType?) {
+        val ids = mangaList.map { it.id }.toSet()
+        libraryPreferences.contentTypeOverrides.getAndSet { raw ->
+            val overrides = LibraryContentType.decodeOverrides(raw).filterKeys { it !in ids }.toMutableMap()
+            if (type != null) ids.forEach { overrides[it] = type }
+            LibraryContentType.encodeOverrides(overrides)
+        }
+    }
+
     fun closeDialog() {
         dialog.update { null }
     }
@@ -756,6 +806,7 @@ class LibraryViewModel(
         ) : Dialog
 
         data class DeleteManga(val manga: List<Manga>) : Dialog
+        data class SetContentType(val manga: List<Manga>, val current: LibraryContentType?) : Dialog
     }
 
     @Immutable
@@ -783,6 +834,9 @@ class LibraryViewModel(
         val favorites: List<LibraryItem> = emptyList(),
         val tracksMap: Map</* Manga */ Long, List<Track>> = emptyMap(),
         val loggedInTrackerIds: Set<Long> = emptySet(),
+        val contentType: LibraryContentType? = null,
+        val contentTypeCounts: Map<LibraryContentType, Int> = emptyMap(),
+        val totalFavoriteCount: Int = 0,
     ) {
         val favoritesById by lazy { favorites.associateBy { it.id } }
     }
@@ -811,7 +865,8 @@ class LibraryViewModel(
 
         val activeCategory: Category? = displayedCategories.getOrNull(coercedActiveCategoryIndex)
 
-        val isLibraryEmpty = libraryData.favorites.isEmpty()
+        // Based on the whole library so switching to an empty section doesn't hide the section switcher
+        val isLibraryEmpty = libraryData.totalFavoriteCount == 0
 
         val selectionMode = selection.isNotEmpty()
 

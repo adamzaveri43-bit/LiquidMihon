@@ -78,6 +78,16 @@
     <string name="action_global_search">Global search</string>
     <string name="action_select_all">Select all</string>
     <string name="action_select_inverse">Select inverse</string>
+    <string name="action_set_content_type">Set type</string>
+    <string name="content_type_all">All</string>
+    <string name="content_type_manga">Manga</string>
+    <string name="content_type_books">Books</string>
+    <string name="content_type_magazines">Magazines</string>
+    <string name="content_type_book">Book</string>
+    <string name="content_type_magazine">Magazine</string>
+    <string name="content_type_automatic">Automatic</string>
+    <string name="content_type_automatic_summary">Decide from the source and genre tags</string>
+    <string name="content_type_dialog_title">File under</string>
     <string name="action_mark_as_read">Mark as read</string>
     <string name="action_mark_as_unread">Mark as unread</string>
     <string name="action_mark_previous_as_read">Mark previous as read</string>

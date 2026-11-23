@@ -32,6 +32,7 @@ fun LibraryToolbar(
     onClickUnselectAll: () -> Unit,
     onClickSelectAll: () -> Unit,
     onClickInvertSelection: () -> Unit,
+    onClickSetContentType: () -> Unit,
     onClickFilter: () -> Unit,
     onClickRefresh: () -> Unit,
     onClickGlobalUpdate: () -> Unit,
@@ -45,6 +46,7 @@ fun LibraryToolbar(
         onClickUnselectAll = onClickUnselectAll,
         onClickSelectAll = onClickSelectAll,
         onClickInvertSelection = onClickInvertSelection,
+        onClickSetContentType = onClickSetContentType,
     )
     else -> LibraryRegularToolbar(
         title = title,
@@ -127,6 +129,7 @@ private fun LibrarySelectionToolbar(
     onClickUnselectAll: () -> Unit,
     onClickSelectAll: () -> Unit,
     onClickInvertSelection: () -> Unit,
+    onClickSetContentType: () -> Unit,
 ) {
     AppBar(
         titleContent = { Text(text = "$selectedCount") },
@@ -142,6 +145,10 @@ private fun LibrarySelectionToolbar(
                         title = stringResource(MR.strings.action_select_inverse),
                         icon = MaterialSymbols.Rounded.FlipToBack,
                         onClick = onClickInvertSelection,
+                    ),
+                    AppBar.OverflowAction(
+                        title = stringResource(MR.strings.action_set_content_type),
+                        onClick = onClickSetContentType,
                     ),
                 ),
             )
