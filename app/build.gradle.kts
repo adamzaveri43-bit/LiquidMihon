@@ -31,14 +31,17 @@ if (Config.includeTelemetry) {
 
 val keystorePropertiesFile = layout.settingsDirectory.file("keystore.properties").asFile
 
+// LiquidMihon's own key for sideloaded builds, kept in the repo so every build installs over the last one
+val sideloadKeystoreFile = layout.settingsDirectory.file("signing/liquidmihon.jks").asFile
+
 android {
     namespace = "eu.kanade.tachiyomi"
 
     defaultConfig {
         applicationId = "app.mihon"
 
-        versionCode = 39
-        versionName = "0.21.3"
+        versionCode = 40
+        versionName = "0.21.3.1"
 
         buildConfigField("boolean", "TELEMETRY_INCLUDED", "${Config.includeTelemetry}")
         buildConfigField("boolean", "UPDATER_ENABLED", "${Config.enableUpdater}")
@@ -64,6 +67,15 @@ android {
                 storePassword = keystoreProperties.getProperty("storePassword")
                 keyAlias = keystoreProperties.getProperty("keyAlias")
                 keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    } else if (sideloadKeystoreFile.exists()) {
+        signingConfigs {
+            named("debug") {
+                storeFile = sideloadKeystoreFile
+                storePassword = "liquidmihon"
+                keyAlias = "liquidmihon"
+                keyPassword = "liquidmihon"
             }
         }
     }

@@ -23,3 +23,4 @@
 *.pyc binary
 *.apk binary
 *.swp binary
+*.jks binary
