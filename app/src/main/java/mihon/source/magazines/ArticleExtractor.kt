@@ -278,7 +278,10 @@ object ArticleExtractor {
     /** The fuller of two versions of the same article, keeping a lead picture if either has one. */
     fun pick(a: Article?, b: Article?): Article? {
         if (a == null || b == null) return a ?: b
-        val best = if (b.textLength > a.textLength) b else a
+        // Photos count too: a photo story's feed copy can have all the pictures and less text than its page
+        fun weight(article: Article) =
+            article.textLength + PHOTO_WEIGHT * article.blocks.count { it is ArticleBlock.Image }
+        val best = if (weight(b) > weight(a)) b else a
         val other = if (best === a) b else a
         return if (best.leadImage == null) best.copy(leadImage = other.leadImage) else best
     }
@@ -625,6 +628,9 @@ object ArticleExtractor {
     private const val MIN_PARAGRAPH = 25
     private const val MIN_FULL_TEXT = 600
     private const val COMPLETE_TEXT = 2000
+
+    /** How much one photo counts for, in characters of text, when choosing between two copies of a story. */
+    private const val PHOTO_WEIGHT = 250
     private const val PLAIN_PARAGRAPH = 420
     private const val MAX_BLOCKS = 600
     private const val MIN_IMAGE_SIDE = 120
@@ -644,7 +650,8 @@ object ArticleExtractor {
         "^(read more|related:|see also|sign up|subscribe|advertisement|share this|follow us|comments$|" +
             "read (the )?full (article|story)|updated:|readtime:|image credits)|" +
             "we may earn (a )?commission|may receive a commission|editor-tested|independently selected|" +
-            "affiliate (link|marketing)|the post .* (appeared first|first appeared) on|" +
+            "affiliate (link|marketing)|the (post|article) .* ?(appeared first|first appeared) on|" +
+            "\\| permalink \\||add to del\\.icio\\.us|" +
             "unlock premium|unlimited access to|magazine subscription|" +
             "sign up (for|to) (our|the) .{0,40}newsletter|^.{0,40} newsletter$|^newsletter$|" +
             "direct to your inbox|delivered (straight )?to your inbox|" +
