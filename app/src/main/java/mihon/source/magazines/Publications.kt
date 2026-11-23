@@ -423,3 +423,51 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
         ),
     ),
 }
+
+/**
+ * Magazines added by the user from any website's feed.
+ *
+ * Nothing is stored on the side: the feed, name and site are packed into the entry's slug
+ * ("custom/<token>"), so the entry keeps working across restarts, backups and restores.
+ */
+object CustomPublications {
+
+    const val PREFIX = "custom/"
+
+    private const val MAX_TAGLINE = 140
+
+    /** Muted magazine-rack colors; each site gets one picked from its address. */
+    private val PALETTE = intArrayOf(
+        0x1B263B, 0x6B2737, 0x2D5D4F, 0x7A4E2D, 0x3D3B6E, 0x8C2F39, 0x264653, 0x5E548E, 0x9C6644, 0x2F3E46,
+    )
+
+    fun create(feed: String, name: String, homepage: String, tagline: String?): Publication {
+        val shortTagline = tagline?.takeIf { it.isNotBlank() }?.let {
+            if (it.length > MAX_TAGLINE) it.take(MAX_TAGLINE).substringBeforeLast(' ') + "…" else it
+        } ?: "Stories from ${hostOf(homepage)}."
+        val color = PALETTE[Math.floorMod(hostOf(homepage).hashCode(), PALETTE.size)]
+        val token = encode(listOf(feed, name, homepage, shortTagline))
+        return Publication(PREFIX + token, name, homepage, feed, shortTagline, color)
+    }
+
+    /** The publication a "custom/<token>" slug stands for, or null if it isn't one. */
+    fun fromSlug(slug: String): Publication? {
+        if (!slug.startsWith(PREFIX)) return null
+        val fields = decode(slug.removePrefix(PREFIX)) ?: return null
+        if (fields.size < 4) return null
+        val (feed, name, homepage, tagline) = fields
+        val color = PALETTE[Math.floorMod(hostOf(homepage).hashCode(), PALETTE.size)]
+        return Publication(slug, name, homepage, feed, tagline, color)
+    }
+
+    fun hostOf(url: String) = url.substringAfter("://").substringBefore('/').removePrefix("www.")
+
+    // Fields joined with a unit separator, then base64url: compact and safe in paths and fragments.
+    private fun encode(fields: List<String>): String = java.util.Base64.getUrlEncoder().withoutPadding()
+        .encodeToString(fields.joinToString("\u001F") { it.replace("\u001F", " ") }.toByteArray())
+
+    private fun decode(token: String): List<String>? = runCatching {
+        String(java.util.Base64.getUrlDecoder().decode(token.substringBefore('?').substringBefore('#')))
+            .split('\u001F')
+    }.getOrNull()
+}

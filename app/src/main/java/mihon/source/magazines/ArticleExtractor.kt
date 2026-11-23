@@ -35,6 +35,9 @@ data class FeedItem(
     val contentHtml: String?,
 )
 
+/** What a feed says about itself. */
+data class FeedInfo(val title: String, val description: String?, val homepage: String?)
+
 /** A parsed article, ready to lay out as pages. */
 data class Article(
     val title: String,
@@ -97,6 +100,34 @@ object ArticleExtractor {
             )
         }
     }
+
+    /** A feed's own name, description and site, or null if [xml] isn't a feed with stories in it. */
+    fun parseFeedInfo(xml: String, feedUrl: String): FeedInfo? {
+        val doc = Jsoup.parse(xml, feedUrl, Parser.xmlParser())
+        val channel = doc.getElementsByTag("channel").firstOrNull()
+            ?: doc.children().firstOrNull { it.tagName().substringAfter(':') == "feed" }
+            ?: return null
+        if (parseFeed(xml, feedUrl).isEmpty()) return null
+        val title = channel.childText("title")?.let(::cleanText).orEmpty()
+        val description = (channel.childText("description") ?: channel.localChildText("subtitle"))
+            ?.let(::cleanText)
+        val homepage = channel.feedLink()?.takeIf { it.startsWith("http") }
+        return FeedInfo(title, description, homepage)
+    }
+
+    /** Feed addresses a web page advertises with `<link rel="alternate">`, best first. */
+    fun feedLinksIn(html: String, pageUrl: String): List<String> {
+        val doc = Jsoup.parse(html, pageUrl)
+        return doc.select("link[rel~=(?i)alternate][href]")
+            .filter { it.attr("type").lowercase() in FEED_TYPES }
+            .filterNot { COMMENTS_FEED.containsMatchIn(it.attr("href") + " " + it.attr("title")) }
+            .map { it.absUrl("href") }
+            .filter { it.startsWith("http") }
+            .distinct()
+    }
+
+    private val FEED_TYPES = setOf("application/rss+xml", "application/atom+xml", "application/feed+xml")
+    private val COMMENTS_FEED = Regex("comments", RegexOption.IGNORE_CASE)
 
     private fun Element.childText(tag: String): String? =
         children().firstOrNull { it.tagName().equals(tag, ignoreCase = true) }?.text()?.trim()?.ifBlank { null }

@@ -12,8 +12,12 @@ import eu.kanade.tachiyomi.source.model.SMangaUpdate
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.source.online.HttpSource
 import kotlinx.coroutines.CancellationException
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Response
+import org.jsoup.Jsoup
 import tachiyomi.domain.library.model.LibraryContentType
 import java.time.Instant
 import java.time.LocalDate
@@ -33,9 +37,16 @@ import java.util.Locale
  * Feeds only list recent stories, so articles already in the library are kept when they drop out
  * of the feed.
  */
-abstract class ModernMagazineSource(private val category: MagazineCategory) : HttpSource() {
+abstract class ModernMagazineSource(
+    sourceTitle: String,
+    protected val publications: List<Publication>,
+    /** Shown in each entry's genres. */
+    private val shelfLabel: String,
+) : HttpSource() {
 
-    override val name = "Magazines Today: ${category.title}"
+    constructor(category: MagazineCategory) : this(category.title, category.publications, category.title)
+
+    override val name = "Magazines Today: $sourceTitle"
 
     override val lang = "all"
 
@@ -52,18 +63,18 @@ abstract class ModernMagazineSource(private val category: MagazineCategory) : Ht
     override fun headersBuilder() = super.headersBuilder()
         .set("Accept", "application/rss+xml, application/atom+xml, application/xml, text/html;q=0.9, */*;q=0.8")
 
-    override fun getHomeUrl(): String = category.publications.first().homepage
+    override fun getHomeUrl(): String = publications.firstOrNull()?.homepage ?: "https://duckduckgo.com"
 
     // ---- Browsing -------------------------------------------------------------------------------
 
     override suspend fun getPopularManga(page: Int): MangasPage =
-        MangasPage(category.publications.map(::toSManga), hasNextPage = false)
+        MangasPage(publications.map(::toSManga), hasNextPage = false)
 
     override suspend fun getLatestUpdates(page: Int): MangasPage = getPopularManga(page)
 
     override suspend fun getSearchManga(page: Int, query: String, filters: FilterList): MangasPage {
         val words = query.trim().lowercase().split(Regex("""\s+""")).filter { it.isNotEmpty() }
-        val matches = category.publications.filter { publication ->
+        val matches = publications.filter { publication ->
             val haystack = "${publication.name} ${publication.tagline} ${publication.homepage}".lowercase()
             words.all { it in haystack }
         }
@@ -75,7 +86,7 @@ abstract class ModernMagazineSource(private val category: MagazineCategory) : Ht
         Filter.Header("Add one to your library to get new stories on library update."),
     )
 
-    private fun toSManga(publication: Publication) = SManga.create().apply {
+    protected fun toSManga(publication: Publication) = SManga.create().apply {
         url = "/${publication.slug}"
         title = publication.name
         thumbnail_url = MagazinePages.coverUrl(publication)
@@ -103,7 +114,7 @@ abstract class ModernMagazineSource(private val category: MagazineCategory) : Ht
                     append("read from the publication's public feed. Each article is a chapter, labelled with ")
                     append("the month it ran. Open an article in WebView to read it on the publisher's site.")
                 }
-                genre = listOf("Magazine", category.title).joinToString()
+                genre = listOf("Magazine", shelfLabel).joinToString()
                 status = SManga.ONGOING
                 thumbnail_url = MagazinePages.coverUrl(publication)
                 update_strategy = UpdateStrategy.ALWAYS_UPDATE
@@ -208,27 +219,27 @@ abstract class ModernMagazineSource(private val category: MagazineCategory) : Ht
         return items
     }
 
-    private fun Response.bodyString(): String = use { it.body.string() }
+    protected fun Response.bodyString(): String = use { it.body.string() }
 
-    private fun publicationOf(url: String): Publication {
-        val slug = url.trim('/').substringBefore('/')
-        return category.publications.find { it.slug == slug }
-            ?: throw Exception("This magazine is no longer available as a built-in source.")
-    }
+    private fun publicationOf(url: String): Publication =
+        findPublication(url.trim('/')) ?: throw Exception("This magazine is no longer available as a built-in source.")
+
+    private fun findPublication(slug: String): Publication? =
+        publications.find { it.slug == slug } ?: CustomPublications.fromSlug(slug)
 
     /** Finds which of this source's publications an article belongs to: by its tag, else by its site. */
     private fun publicationForArticle(url: String): Publication {
-        val slug = url.substringAfter('#', "")
-        category.publications.find { it.slug == slug }?.let { return it }
+        findPublication(url.substringAfter('#', ""))?.let { return it }
         val host = hostOf(url)
         val path = url.substringBefore('#').substringAfter(host, "")
-        return category.publications
+        return publications
             .filter { hostOf(it.homepage) == host }
             // Prefer the most specific section, e.g. "Esquire UK" for esquire.com/uk/...
             .sortedByDescending { it.homepage.substringAfter(host).length }
             .firstOrNull { path.startsWith(it.homepage.substringAfter(host).trimEnd('/')) }
-            ?: category.publications.firstOrNull { hostOf(it.homepage) == host }
-            ?: category.publications.first()
+            ?: publications.firstOrNull { hostOf(it.homepage) == host }
+            ?: publications.firstOrNull()
+            ?: throw Exception("Couldn't tell which magazine this article is from. Refresh the entry and try again.")
     }
 
     private fun sameArticle(a: String, b: String) = normalize(a) == normalize(b)
@@ -240,7 +251,7 @@ abstract class ModernMagazineSource(private val category: MagazineCategory) : Ht
         .removePrefix("www.")
 
     override fun getMangaUrl(manga: SManga): String =
-        category.publications.find { it.slug == manga.url.trim('/') }?.homepage ?: getHomeUrl()
+        findPublication(manga.url.trim('/'))?.homepage ?: getHomeUrl()
 
     override fun getChapterUrl(chapter: SChapter): String = chapter.url.substringBefore('#')
 
@@ -275,3 +286,124 @@ class DesignMagazines : ModernMagazineSource(MagazineCategory.DESIGN)
 class ArtMagazines : ModernMagazineSource(MagazineCategory.ART)
 
 class TechMagazines : ModernMagazineSource(MagazineCategory.TECH)
+
+/**
+ * Any magazine with a feed: search a site's address (or its feed's) and it becomes an entry like
+ * the built-in ones. The feed is found from the page's `<link rel="alternate">` tags, or by trying
+ * the usual feed paths.
+ */
+class CustomMagazines : ModernMagazineSource("Add your own", emptyList(), "Your magazines") {
+
+    override suspend fun getPopularManga(page: Int): MangasPage = throw Exception(HINT)
+
+    override suspend fun getSearchManga(page: Int, query: String, filters: FilterList): MangasPage {
+        val address = toAddress(query) ?: throw Exception(HINT)
+        return MangasPage(listOf(toSManga(discover(address))), hasNextPage = false)
+    }
+
+    override fun getFilterList() = FilterList(
+        Filter.Header("Search a magazine's website, like monocle.com."),
+        Filter.Header("Its feed is found for you; add the result to your library to follow it."),
+    )
+
+    private suspend fun discover(address: HttpUrl): Publication {
+        val first = try {
+            fetch(address.toString())
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            throw Exception("Couldn't open ${address.host}: ${e.message ?: "no response"}")
+        }
+
+        // The address may already be a feed.
+        ArticleExtractor.parseFeedInfo(first.body, first.url)?.let { return publicationFor(first.url, it, null) }
+
+        val page = Jsoup.parse(first.body, first.url)
+        val siteName = page.selectFirst("meta[property=og:site_name]")?.attr("content")?.ifBlank { null }
+            ?: page.title().ifBlank { null }
+        val origin = first.url.toHttpUrl().let { "${it.scheme}://${it.host}" }
+        val candidates = (ArticleExtractor.feedLinksIn(first.body, first.url) + COMMON_FEED_PATHS.map { origin + it })
+            .distinct()
+            .take(MAX_TRIES)
+
+        for (candidate in candidates) {
+            val response = try {
+                fetch(candidate)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                continue
+            }
+            val info = ArticleExtractor.parseFeedInfo(response.body, response.url) ?: continue
+            return publicationFor(response.url, info, siteName, homepage = first.url)
+        }
+        throw Exception(
+            "Couldn't find a feed on ${address.host}. If the site has an RSS link (often ending in /feed or " +
+                "/rss), search that instead.",
+        )
+    }
+
+    private fun publicationFor(feed: String, info: FeedInfo, siteName: String?, homepage: String? = null): Publication {
+        val site = info.homepage ?: homepage ?: feed.toHttpUrl().let { "${it.scheme}://${it.host}/" }
+        val host = CustomPublications.hostOf(site)
+        val name = cleanName(siteName, host) ?: cleanName(info.title, host) ?: host
+        return CustomPublications.create(feed, name, site, info.description)
+    }
+
+    private class Fetched(val url: String, val body: String)
+
+    private suspend fun fetch(url: String): Fetched {
+        val response = client.newCall(GET(url, headers)).awaitSuccess()
+        val finalUrl = response.request.url.toString()
+        return Fetched(finalUrl, response.bodyString())
+    }
+
+    companion object {
+        private const val HINT =
+            "Search a magazine's website address, like monocle.com, to add it. Any site with an RSS feed works."
+
+        private const val MAX_TRIES = 14
+        private const val MAX_NAME = 48
+
+        private val COMMON_FEED_PATHS = listOf(
+            "/feed/",
+            "/rss/",
+            "/feed.xml",
+            "/rss.xml",
+            "/atom.xml",
+            "/index.xml",
+            "/feeds/all",
+            "/rss",
+            "/rss/index.xml",
+            "/?feed=rss2",
+            "/blog/feed/",
+        )
+
+        private val NAME_SEPARATOR = Regex("""\s+[|–—•·-]\s+|:\s+""")
+
+        /** A typed address, with https:// added when it's left out; null for anything that isn't one. */
+        fun toAddress(query: String): HttpUrl? {
+            val text = query.trim()
+            if (text.isEmpty() || text.any { it.isWhitespace() } || '.' !in text) return null
+            val withScheme = if (text.contains("://")) text else "https://$text"
+            return withScheme.toHttpUrlOrNull()?.takeIf { it.scheme == "https" || it.scheme == "http" }
+        }
+
+        /**
+         * "Latest News | Monocle" -> "Monocle": of the title's parts, the one that names the site,
+         * else the first. Null when there's nothing usable.
+         */
+        fun cleanName(title: String?, host: String): String? {
+            val parts = title?.split(NAME_SEPARATOR)?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty()
+            if (parts.isEmpty()) return null
+            val site = host.substringBefore('.').lettersOnly()
+            val best = parts.firstOrNull { part ->
+                val letters = part.lettersOnly()
+                letters.isNotEmpty() && (site.contains(letters) || letters.contains(site))
+            } ?: parts.first()
+            return if (best.length > MAX_NAME) best.take(MAX_NAME).substringBeforeLast(' ') else best
+        }
+
+        private fun String.lettersOnly() = lowercase().filter { it.isLetterOrDigit() }
+    }
+}

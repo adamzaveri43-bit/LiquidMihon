@@ -281,7 +281,7 @@ internal object MagazinePages {
 
     /** A magazine-shelf style cover with the publication's masthead. */
     @Synchronized
-    fun renderCover(publication: Publication, category: MagazineCategory): ByteArray {
+    fun renderCover(publication: Publication, kicker: String): ByteArray {
         val width = 600
         val height = 860
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
@@ -308,11 +308,11 @@ internal object MagazinePages {
         val lineY = 56f + mastheadLayout.height + 26
         canvas.drawRect(40f, lineY, width - 40f, lineY + 3, line)
 
-        val kicker = textPaint(24f, Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD), onColor).apply {
+        val kickerText = textPaint(24f, Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD), onColor).apply {
             letterSpacing = 0.2f
             alpha = 220
         }
-        drawLayout(canvas, makeLayout(category.title.uppercase(), kicker, innerWidth), 40f, lineY + 22)
+        drawLayout(canvas, makeLayout(kicker.uppercase(), kickerText, innerWidth), 40f, lineY + 22)
 
         val tagline = textPaint(34f, Typeface.create(Typeface.SERIF, Typeface.ITALIC), onColor)
         val taglineLayout = makeLayout(publication.tagline, tagline, innerWidth, extra = 6f)
@@ -429,9 +429,14 @@ internal object MagazinePages {
             val bytes = when (segments.firstOrNull()) {
                 "page" -> decode(request.url.toString())?.let(::renderPage)
                 "cover" -> {
-                    val slug = segments.getOrNull(1)
-                    MagazineCategory.entries.firstNotNullOfOrNull { category ->
-                        category.publications.find { it.slug == slug }?.let { renderCover(it, category) }
+                    val slug = segments.drop(1).joinToString("/")
+                    val custom = CustomPublications.fromSlug(slug)
+                    if (custom != null) {
+                        renderCover(custom, CustomPublications.hostOf(custom.homepage))
+                    } else {
+                        MagazineCategory.entries.firstNotNullOfOrNull { category ->
+                            category.publications.find { it.slug == slug }?.let { renderCover(it, category.title) }
+                        }
                     }
                 }
                 else -> null

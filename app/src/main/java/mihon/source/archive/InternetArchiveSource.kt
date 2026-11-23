@@ -22,6 +22,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import mihon.source.magazines.ArtMagazines
 import mihon.source.magazines.CarMagazines
+import mihon.source.magazines.CustomMagazines
 import mihon.source.magazines.DesignMagazines
 import mihon.source.magazines.MensStyleMagazines
 import mihon.source.magazines.ModernMagazineSource
@@ -401,7 +402,14 @@ object BuiltinSources {
 
     /** Current magazines from the publishers' own feeds. */
     private val magazines: List<ModernMagazineSource> by lazy {
-        listOf(MensStyleMagazines(), CarMagazines(), DesignMagazines(), ArtMagazines(), TechMagazines())
+        listOf(
+            MensStyleMagazines(),
+            CarMagazines(),
+            DesignMagazines(),
+            ArtMagazines(),
+            TechMagazines(),
+            CustomMagazines(),
+        )
     }
 
     val all: List<HttpSource> by lazy { magazines + archive }
