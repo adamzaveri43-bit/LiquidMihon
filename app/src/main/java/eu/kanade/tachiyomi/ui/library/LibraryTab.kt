@@ -50,8 +50,8 @@ import eu.kanade.presentation.library.FolderNameDialog
 import eu.kanade.presentation.library.FolderOptionsDialog
 import eu.kanade.presentation.library.LibraryReorderDialog
 import eu.kanade.presentation.library.LibrarySettingsDialog
-import eu.kanade.presentation.library.components.LibraryBackgroundLayer
 import eu.kanade.presentation.library.SetContentTypeDialog
+import eu.kanade.presentation.library.components.LibraryBackgroundLayer
 import eu.kanade.presentation.library.components.LibraryContent
 import eu.kanade.presentation.library.components.LibraryContentTypeBar
 import eu.kanade.presentation.library.components.LibraryStyle
