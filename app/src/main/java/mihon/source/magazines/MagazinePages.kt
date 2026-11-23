@@ -76,7 +76,12 @@ internal object MagazinePages {
      * pictures placed after the text page they appear in.
      */
     @Synchronized
-    fun paginate(article: Article, publication: Publication): List<String> {
+    fun paginate(
+        article: Article,
+        publication: Publication,
+        byline: String? = null,
+        firstPageNumber: Int = 1,
+    ): List<String> {
         val accent = accentFor(publication.color)
         val urls = mutableListOf<String>()
         val pendingImages = mutableListOf<String>()
@@ -88,7 +93,7 @@ internal object MagazinePages {
         val header = Header(
             kicker = publication.name.uppercase(),
             title = article.title,
-            byline = listOfNotNull(
+            byline = byline ?: listOfNotNull(
                 article.author?.let { "By $it" },
                 article.date?.let(::formatDate),
             ).joinToString("  ·  ").ifBlank { null },
@@ -150,7 +155,7 @@ internal object MagazinePages {
         flush()
 
         // Number the text pages now that the order is final.
-        var number = 0
+        var number = firstPageNumber - 1
         return urls.map { url ->
             number++
             if (!url.isTextPage()) return@map url

@@ -40,8 +40,8 @@ android {
     defaultConfig {
         applicationId = "app.mihon"
 
-        versionCode = 44
-        versionName = "0.21.3.5"
+        versionCode = 45
+        versionName = "0.21.3.6"
 
         buildConfigField("boolean", "TELEMETRY_INCLUDED", "${Config.includeTelemetry}")
         buildConfigField("boolean", "UPDATER_ENABLED", "${Config.enableUpdater}")

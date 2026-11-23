@@ -8,6 +8,7 @@ package mihon.source.magazines
  * @param fullTextInFeed true when the feed carries whole articles, so article pages needn't be fetched
  * @param color masthead background for the generated cover, as 0xRRGGBB
  * @param kind what [feed] points at: an RSS/Atom feed, or a substitute for sites that have none
+ * @param issues how stories are bundled into issues (one chapter each), sized to how often the site publishes
  */
 data class Publication(
     val slug: String,
@@ -19,6 +20,7 @@ data class Publication(
     val fullTextInFeed: Boolean = false,
     val kind: FeedKind = FeedKind.RSS,
     val archive: Archive? = null,
+    val issues: IssuePeriod = IssuePeriod.MONTH,
 )
 
 /** Where a publication's older stories can be found, beyond what its feed lists. */
@@ -71,6 +73,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "Style, culture and the men who shape it.",
                 0x111111,
                 archive = Archive.MonthlySitemap("https://www.gq.com/sitemap-{yyyy}-{MM}.xml"),
+                issues = IssuePeriod.DAY,
             ),
             Publication(
                 "esquire",
@@ -79,6 +82,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "https://www.esquire.com/rss/all.xml/",
                 "Style, food, culture and long reads.",
                 0xC8102E,
+                issues = IssuePeriod.DAY,
             ),
             Publication(
                 "esquire-style",
@@ -87,6 +91,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "https://www.esquire.com/rss/style.xml/",
                 "Esquire's menswear, watches and grooming desk.",
                 0x8B0A1A,
+                issues = IssuePeriod.WEEK,
             ),
             Publication(
                 "esquire-uk",
@@ -95,6 +100,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "https://www.esquire.com/uk/rss/all.xml/",
                 "The British edition of Esquire.",
                 0x1D1D1B,
+                issues = IssuePeriod.WEEK,
             ),
             Publication(
                 "mens-health",
@@ -103,6 +109,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "https://www.menshealth.com/rss/all.xml/",
                 "Fitness, health, gear and grooming.",
                 0xD2232A,
+                issues = IssuePeriod.DAY,
             ),
             Publication(
                 "highsnobiety",
@@ -112,6 +119,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "Streetwear, sneakers and fashion culture.",
                 0x000000,
                 fullTextInFeed = true,
+                issues = IssuePeriod.WEEK,
             ),
             Publication(
                 "put-this-on",
@@ -151,6 +159,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 0x1F3A2F,
                 fullTextInFeed = true,
                 archive = Archive.FeedPages,
+                issues = IssuePeriod.DAY,
             ),
             Publication(
                 "hodinkee",
@@ -160,6 +169,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "Watches, reviewed and explained.",
                 0x0B2545,
                 fullTextInFeed = true,
+                issues = IssuePeriod.WEEK,
             ),
             Publication(
                 "dmarge",
@@ -178,6 +188,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "https://manofmany.com/feed",
                 "Lifestyle, fashion, cars and tech for men.",
                 0x222222,
+                issues = IssuePeriod.WEEK,
             ),
             Publication(
                 "vogue",
@@ -187,6 +198,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "Fashion, beauty and culture.",
                 0x000000,
                 archive = Archive.MonthlySitemap("https://www.vogue.com/sitemap-{yyyy}-{MM}.xml"),
+                issues = IssuePeriod.DAY,
             ),
             Publication(
                 "vogue-fashion",
@@ -195,6 +207,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "https://www.vogue.com/feed/fashion/rss",
                 "Runway, trends and fashion news from Vogue.",
                 0x2B2B2B,
+                issues = IssuePeriod.DAY,
             ),
             Publication(
                 "fashionista",
@@ -204,6 +217,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "Fashion industry news and street style.",
                 0xE6007E,
                 fullTextInFeed = true,
+                issues = IssuePeriod.WEEK,
             ),
         ),
     ),
@@ -217,6 +231,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "https://www.caranddriver.com/rss/all.xml/",
                 "Reviews, first drives and new-car news.",
                 0xD71920,
+                issues = IssuePeriod.DAY,
             ),
             Publication(
                 "road-and-track",
@@ -225,6 +240,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "https://www.roadandtrack.com/rss/all.xml/",
                 "Performance cars, racing and car culture.",
                 0x0A0A0A,
+                issues = IssuePeriod.DAY,
             ),
             Publication(
                 "motor1",
@@ -233,6 +249,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "https://www.motor1.com/rss/news/all/",
                 "New models, spy shots and concept reveals.",
                 0xE30613,
+                issues = IssuePeriod.WEEK,
             ),
             Publication(
                 "carscoops",
@@ -242,6 +259,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "Concepts, debuts and design news from the car world.",
                 0x0057B8,
                 fullTextInFeed = true,
+                issues = IssuePeriod.DAY,
             ),
             Publication(
                 "the-drive",
@@ -251,6 +269,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "Car news, reviews and features.",
                 0x111111,
                 fullTextInFeed = true,
+                issues = IssuePeriod.WEEK,
             ),
             Publication(
                 "jalopnik",
@@ -260,6 +279,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "Car culture with opinions.",
                 0x5A2D82,
                 fullTextInFeed = true,
+                issues = IssuePeriod.DAY,
             ),
             Publication(
                 "hagerty",
@@ -270,6 +290,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 0x00263E,
                 fullTextInFeed = true,
                 archive = Archive.FeedPages,
+                issues = IssuePeriod.WEEK,
             ),
             Publication(
                 "insideevs",
@@ -278,6 +299,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "https://insideevs.com/rss/news/all/",
                 "Electric cars, new models and concepts.",
                 0x00A651,
+                issues = IssuePeriod.WEEK,
             ),
             Publication(
                 "electrek",
@@ -287,6 +309,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "Electric vehicles and clean transport.",
                 0x1E73BE,
                 archive = Archive.FeedPages,
+                issues = IssuePeriod.DAY,
             ),
             Publication(
                 "top-gear",
@@ -297,6 +320,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 0x00A0DF,
                 kind = FeedKind.NEXT_DATA,
                 archive = Archive.ListingPages("https://www.topgear.com/car-news/page/{n}"),
+                issues = IssuePeriod.WEEK,
             ),
             Publication(
                 "car-design-news",
@@ -330,6 +354,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 0x000000,
                 fullTextInFeed = true,
                 archive = Archive.FeedPages,
+                issues = IssuePeriod.DAY,
             ),
             Publication(
                 "designboom",
@@ -340,6 +365,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 0xE2001A,
                 fullTextInFeed = true,
                 archive = Archive.FeedPages,
+                issues = IssuePeriod.WEEK,
             ),
             Publication(
                 "designboom-tech",
@@ -360,6 +386,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 0x1C1C1C,
                 fullTextInFeed = true,
                 archive = Archive.MonthlySitemap("https://www.wallpaper.com/sitemap-{yyyy}-{MM}.xml"),
+                issues = IssuePeriod.DAY,
             ),
             Publication(
                 "archdaily",
@@ -369,6 +396,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "The world's most visited architecture site.",
                 0x333333,
                 fullTextInFeed = true,
+                issues = IssuePeriod.DAY,
             ),
             Publication(
                 "core77",
@@ -387,6 +415,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 0x00A0B0,
                 fullTextInFeed = true,
                 archive = Archive.FeedPages,
+                issues = IssuePeriod.WEEK,
             ),
             Publication(
                 "creative-boom",
@@ -396,6 +425,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "Graphic design, illustration and creative work.",
                 0xFF4F00,
                 fullTextInFeed = true,
+                issues = IssuePeriod.WEEK,
             ),
         ),
     ),
@@ -411,6 +441,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 0x111111,
                 fullTextInFeed = true,
                 archive = Archive.FeedPages,
+                issues = IssuePeriod.WEEK,
             ),
             Publication(
                 "artnews",
@@ -421,6 +452,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 0xC8102E,
                 fullTextInFeed = true,
                 archive = Archive.FeedPages,
+                issues = IssuePeriod.WEEK,
             ),
             Publication(
                 "hyperallergic",
@@ -430,6 +462,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "Art criticism, reviews and news.",
                 0xD4145A,
                 fullTextInFeed = true,
+                issues = IssuePeriod.DAY,
             ),
             Publication(
                 "petapixel",
@@ -438,6 +471,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "https://petapixel.com/feed/",
                 "Photography news, gear and technique.",
                 0x1E88E5,
+                issues = IssuePeriod.WEEK,
             ),
         ),
     ),
@@ -452,6 +486,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "Technology, science and culture.",
                 0x5200FF,
                 fullTextInFeed = true,
+                issues = IssuePeriod.DAY,
             ),
             Publication(
                 "wired",
@@ -461,6 +496,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "How technology is changing the world.",
                 0x000000,
                 archive = Archive.MonthlySitemap("https://www.wired.com/sitemap-{yyyy}-{MM}.xml"),
+                issues = IssuePeriod.DAY,
             ),
             Publication(
                 "ars-technica",
@@ -470,6 +506,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "Tech, science and policy in depth.",
                 0xFF4E00,
                 fullTextInFeed = true,
+                issues = IssuePeriod.WEEK,
             ),
             Publication(
                 "engadget",
@@ -479,6 +516,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "Gadgets and consumer tech.",
                 0x6001D2,
                 fullTextInFeed = true,
+                issues = IssuePeriod.DAY,
             ),
             Publication(
                 "new-atlas",
@@ -487,6 +525,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "https://newatlas.com/index.rss",
                 "Science, design and innovation.",
                 0x0D2C54,
+                issues = IssuePeriod.WEEK,
             ),
             Publication(
                 "popular-science",
@@ -496,6 +535,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "Science and technology explained.",
                 0x0B3D91,
                 fullTextInFeed = true,
+                issues = IssuePeriod.DAY,
             ),
         ),
     ),
@@ -510,6 +550,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "Destinations, hotels and how to travel well.",
                 0x0F2B46,
                 archive = Archive.MonthlySitemap("https://www.cntraveler.com/sitemap-{yyyy}-{MM}.xml"),
+                issues = IssuePeriod.DAY,
             ),
             Publication(
                 "cn-traveller-uk",
@@ -519,6 +560,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "The British edition: hotels, food and trips.",
                 0x1C3D5A,
                 archive = Archive.MonthlySitemap("https://www.cntraveller.com/sitemap-{yyyy}-{MM}.xml"),
+                issues = IssuePeriod.WEEK,
             ),
             Publication(
                 "wallpaper-travel",
@@ -552,6 +594,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 0xC1440E,
                 fullTextInFeed = true,
                 archive = Archive.FeedPages,
+                issues = IssuePeriod.WEEK,
             ),
             Publication(
                 "roads-and-kingdoms",
@@ -571,6 +614,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "Points, miles, airlines and hotel reviews.",
                 0x0A2240,
                 fullTextInFeed = true,
+                issues = IssuePeriod.DAY,
             ),
             Publication(
                 "simple-flying",
@@ -580,6 +624,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "Airlines, aircraft and aviation news.",
                 0x1565C0,
                 fullTextInFeed = true,
+                issues = IssuePeriod.DAY,
             ),
             Publication(
                 "skift",
@@ -590,6 +635,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 0x111111,
                 fullTextInFeed = true,
                 archive = Archive.FeedPages,
+                issues = IssuePeriod.WEEK,
             ),
         ),
     ),
@@ -604,6 +650,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "Celebrity homes, design and architecture.",
                 0x000000,
                 archive = Archive.MonthlySitemap("https://www.architecturaldigest.com/sitemap-{yyyy}-{MM}.xml"),
+                issues = IssuePeriod.DAY,
             ),
             Publication(
                 "elle-decor",
@@ -612,6 +659,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "https://www.elledecor.com/rss/all.xml/",
                 "Interiors, designers and design travel.",
                 0x111111,
+                issues = IssuePeriod.WEEK,
             ),
             Publication(
                 "house-beautiful",
@@ -620,6 +668,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "https://www.housebeautiful.com/rss/all.xml/",
                 "Decorating ideas, homes and designers.",
                 0xB5121B,
+                issues = IssuePeriod.WEEK,
             ),
             Publication(
                 "veranda",
@@ -628,6 +677,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "https://www.veranda.com/rss/all.xml/",
                 "Luxury interiors, gardens and living.",
                 0x2E4B3C,
+                issues = IssuePeriod.WEEK,
             ),
             Publication(
                 "house-and-garden",
@@ -637,6 +687,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "British interiors, gardens and food.",
                 0x2F5233,
                 archive = Archive.MonthlySitemap("https://www.houseandgarden.co.uk/sitemap-{yyyy}-{MM}.xml"),
+                issues = IssuePeriod.DAY,
             ),
             Publication(
                 "livingetc",
@@ -647,6 +698,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 0xE4002B,
                 fullTextInFeed = true,
                 archive = Archive.MonthlySitemap("https://www.livingetc.com/sitemap-{yyyy}-{MM}.xml"),
+                issues = IssuePeriod.DAY,
             ),
             Publication(
                 "homes-and-gardens",
@@ -657,6 +709,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 0x1F3A5F,
                 fullTextInFeed = true,
                 archive = Archive.MonthlySitemap("https://www.homesandgardens.com/sitemap-{yyyy}-{MM}.xml"),
+                issues = IssuePeriod.DAY,
             ),
             Publication(
                 "dezeen-interiors",
@@ -687,6 +740,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 0x00A9B5,
                 fullTextInFeed = true,
                 archive = Archive.FeedPages,
+                issues = IssuePeriod.WEEK,
             ),
             Publication(
                 "domino",
@@ -696,6 +750,7 @@ enum class MagazineCategory(val title: String, val publications: List<Publicatio
                 "Decorating, shopping and real homes.",
                 0xE85D75,
                 fullTextInFeed = true,
+                issues = IssuePeriod.WEEK,
             ),
             Publication(
                 "remodelista",
@@ -745,13 +800,28 @@ object CustomPublications {
         0x1B263B, 0x6B2737, 0x2D5D4F, 0x7A4E2D, 0x3D3B6E, 0x8C2F39, 0x264653, 0x5E548E, 0x9C6644, 0x2F3E46,
     )
 
-    fun create(feed: String, name: String, homepage: String, tagline: String?): Publication {
+    fun create(
+        feed: String,
+        name: String,
+        homepage: String,
+        tagline: String?,
+        issues: IssuePeriod = IssuePeriod.MONTH,
+    ): Publication {
         val shortTagline = tagline?.takeIf { it.isNotBlank() }?.let {
             if (it.length > MAX_TAGLINE) it.take(MAX_TAGLINE).substringBeforeLast(' ') + "…" else it
         } ?: "Stories from ${hostOf(homepage)}."
         val color = PALETTE[Math.floorMod(hostOf(homepage).hashCode(), PALETTE.size)]
-        val token = encode(listOf(feed, name, homepage, shortTagline))
-        return Publication(PREFIX + token, name, homepage, feed, shortTagline, color, archive = Archive.FeedPages)
+        val token = encode(listOf(feed, name, homepage, shortTagline, issues.name))
+        return Publication(
+            PREFIX + token,
+            name,
+            homepage,
+            feed,
+            shortTagline,
+            color,
+            archive = Archive.FeedPages,
+            issues = issues,
+        )
     }
 
     /** The publication a "custom/<token>" slug stands for, or null if it isn't one. */
@@ -761,7 +831,10 @@ object CustomPublications {
         if (fields.size < 4) return null
         val (feed, name, homepage, tagline) = fields
         val color = PALETTE[Math.floorMod(hostOf(homepage).hashCode(), PALETTE.size)]
-        return Publication(slug, name, homepage, feed, tagline, color, archive = Archive.FeedPages)
+        // Entries added before issues existed have no period saved; monthly suits most small sites
+        val issues = fields.getOrNull(4)?.let { saved -> IssuePeriod.entries.find { it.name == saved } }
+            ?: IssuePeriod.MONTH
+        return Publication(slug, name, homepage, feed, tagline, color, archive = Archive.FeedPages, issues = issues)
     }
 
     fun hostOf(url: String) = url.substringAfter("://").substringBefore('/').removePrefix("www.")

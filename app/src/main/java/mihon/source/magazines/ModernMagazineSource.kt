@@ -15,6 +15,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -125,8 +127,10 @@ abstract class ModernMagazineSource(
                 description = buildString {
                     append(publication.tagline)
                     append("\n\nCurrent stories from ${publication.homepage.removePrefix("https://")}, ")
-                    append("read from the publication's public feed. Each article is a chapter, labelled with ")
-                    append("the month it ran. Open an article in WebView to read it on the publisher's site.")
+                    append(
+                        "read from the publication's public feed and bundled into ${periodName(publication.issues)}. ",
+                    )
+                    append("Each issue opens with its contents, then every story in it, laid out as magazine pages.")
                 }
                 genre = listOf("Magazine", shelfLabel).joinToString()
                 status = SManga.ONGOING
@@ -140,14 +144,15 @@ abstract class ModernMagazineSource(
 
         val chapterList = if (fetchChapters) {
             // Older stories are a bonus: if the archive can't be reached, the latest ones still load.
+            val known = knownArticles(chapters)
             val older = try {
-                fetchArchive(publication, known = chapters, latest = latest)
+                fetchArchive(publication, known = known, latest = latest)
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
                 emptyList()
             }
-            mergeChapters(publication, chapters, latest + older)
+            buildIssues(publication, known, latest + older)
         } else {
             chapters
         }
@@ -168,50 +173,68 @@ abstract class ModernMagazineSource(
         )
     }
 
-    private fun FeedItem.toSChapter(publication: Publication) = SChapter.create().apply {
-        // The fragment ties the article to its publication; it's never sent to the server.
-        url = "${link.substringBefore('#')}#${publication.slug}"
-        name = title
-        val millis = date ?: System.currentTimeMillis()
-        date_upload = millis
-        scanlator = monthLabel(millis)
+    /** Every story already in the library's issues (and in article chapters from before issues existed). */
+    private fun knownArticles(chapters: List<SChapter>): List<ArticleRef> = chapters.flatMap { chapter ->
+        if (Issues.isIssueUrl(chapter.url)) {
+            Issues.decode(chapter.memo)
+        } else {
+            listOf(ArticleRef(getChapterUrl(chapter), chapter.name, chapter.date_upload, null))
+        }
     }
 
     /**
-     * Existing chapters plus [items], newest first. Titles a listing had to make up from the address
-     * never replace a real one, and an undated story keeps the date it was first seen so it doesn't
-     * jump to the top on every refresh.
+     * Bundles the known stories and the newly listed [items] into issues, newest first. Titles a listing
+     * had to make up from the address never replace a real one, and an undated story keeps the date it
+     * was first seen so it doesn't jump to the newest issue on every refresh.
      */
-    private suspend fun mergeChapters(
+    private suspend fun buildIssues(
         publication: Publication,
-        existing: List<SChapter>,
+        known: List<ArticleRef>,
         items: List<FeedItem>,
     ): List<SChapter> {
-        val merged = LinkedHashMap<String, SChapter>()
-        existing.forEach { merged[it.url] = it }
+        val merged = LinkedHashMap<String, ArticleRef>()
+        known.forEach { merged[normalize(it.link)] = it }
+        val now = System.currentTimeMillis()
         for (item in items) {
-            val chapter = item.toSChapter(publication)
-            val previous = merged[chapter.url]
-            if (previous != null) {
-                if (hasMadeUpTitle(chapter) && !hasMadeUpTitle(previous)) chapter.name = previous.name
-                if (item.date == null) {
-                    chapter.date_upload = previous.date_upload
-                    chapter.scanlator = previous.scanlator
-                }
-            }
-            merged[chapter.url] = chapter
+            val key = normalize(item.link)
+            val previous = merged[key]
+            merged[key] = ArticleRef(
+                link = item.link.substringBefore('#'),
+                title = if (previous != null && hasMadeUpTitle(item.title, item.link) &&
+                    !hasMadeUpTitle(previous.title, previous.link)
+                ) {
+                    previous.title
+                } else {
+                    item.title
+                },
+                date = item.date ?: previous?.date ?: now,
+                image = item.imageUrl ?: previous?.image,
+            )
         }
-        val chapters = merged.values.sortedByDescending { it.date_upload }.take(MAX_CHAPTERS)
-        // Number the stories 1, 2, 3… oldest first. Articles aren't numbered issues, and numbering by date
-        // left gaps that the app reported as "missing chapters" even with the whole feed loaded.
-        chapters.forEachIndexed { index, chapter -> chapter.chapter_number = (chapters.size - index).toFloat() }
+        val articles = merged.values.sortedByDescending { it.date }.take(MAX_ARTICLES)
         // Fill in real headlines a batch at a time, newest first; later refreshes do the rest.
-        fillInTitles(chapters.filter(::hasMadeUpTitle).take(MAX_TITLE_LOOKUPS))
-        return chapters
+        fillInTitles(articles.filter { hasMadeUpTitle(it.title, it.link) }.take(MAX_TITLE_LOOKUPS))
+
+        val issues = articles.groupBy { Issues.keyFor(it.date, publication.issues) }
+            .entries
+            .sortedByDescending { it.key.drop(1) }
+        return issues.mapIndexed { index, (key, stories) ->
+            SChapter.create().apply {
+                url = Issues.chapterUrl(key, publication)
+                name = Issues.label(key)
+                date_upload = stories.maxOf { it.date }
+                // Issues are numbered 1, 2, 3… oldest first, so there are never gaps to call "missing"
+                chapter_number = (issues.size - index).toFloat()
+                // Read in the order they ran
+                memo = Issues.encode(stories.sortedBy { it.date })
+            }
+        }
     }
 
-    private fun hasMadeUpTitle(chapter: SChapter): Boolean =
-        chapter.name.equals(ArticleExtractor.titleFromUrl(getChapterUrl(chapter)), ignoreCase = true)
+    private fun hasMadeUpTitle(title: String, link: String): Boolean =
+        title.isBlank() || title.equals(ArticleExtractor.titleFromUrl(link), ignoreCase = true)
+
+    private fun hasMadeUpTitle(chapter: SChapter): Boolean = hasMadeUpTitle(chapter.name, getChapterUrl(chapter))
 
     /**
      * Stories from just before the oldest one already known, so each refresh reaches a little
@@ -219,15 +242,15 @@ abstract class ModernMagazineSource(
      */
     private suspend fun fetchArchive(
         publication: Publication,
-        known: List<SChapter>,
+        known: List<ArticleRef>,
         latest: List<FeedItem>,
     ): List<FeedItem> {
         val archive = publication.archive ?: return emptyList()
-        val oldest = (known.map { it.date_upload } + latest.mapNotNull { it.date }).filter { it > 0 }.minOrNull()
+        val oldest = (known.map { it.date } + latest.mapNotNull { it.date }).filter { it > 0 }.minOrNull()
             ?: System.currentTimeMillis()
         // Pages hold as many stories as the first one; how many are known says roughly where they end.
         val pageSize = latest.size.coerceAtLeast(1)
-        val knownCount = (known.map { getChapterUrl(it) } + latest.map { it.link }).toSet().size
+        val knownCount = (known.map { normalize(it.link) } + latest.map { normalize(it.link) }).toSet().size
         val firstPage = maxOf(2, knownCount / pageSize + 1)
         return when (archive) {
             Archive.FeedPages -> fetchPages(firstPage) { page ->
@@ -280,33 +303,104 @@ abstract class ModernMagazineSource(
     // ---- Pages ----------------------------------------------------------------------------------
 
     override suspend fun getPageList(chapter: SChapter): List<Page> {
+        val urls = if (Issues.isIssueUrl(chapter.url)) issuePages(chapter) else articlePages(chapter)
+        return urls.mapIndexed { index, url -> Page(index, imageUrl = url) }
+    }
+
+    /** A story saved as its own chapter, from before stories were bundled into issues. */
+    private suspend fun articlePages(chapter: SChapter): List<String> {
         val publication = publicationForArticle(chapter.url)
-        val article = loadArticle(publication, chapter)
+        val link = getChapterUrl(chapter)
+        val feed = feedFor(publication)
+        val article = loadArticle(
+            publication,
+            ArticleRef(link, chapter.name.takeUnless { hasMadeUpTitle(chapter) }.orEmpty(), chapter.date_upload, null),
+            feed,
+        )
         if (article.blocks.isEmpty() && article.leadImage == null) {
             throw Exception("Couldn't read this article here. Open it in WebView to read it on the publisher's site.")
         }
-        return MagazinePages.paginate(article, publication).mapIndexed { index, url -> Page(index, imageUrl = url) }
+        return MagazinePages.paginate(article, publication)
     }
 
-    private suspend fun loadArticle(publication: Publication, chapter: SChapter): Article {
-        // The feed often has the whole article (and is cheaper than the web page); look there first.
-        val link = getChapterUrl(chapter)
-        val item = try {
-            // Feed substitutes carry no article text, so there's nothing to look up there.
-            if (publication.kind != FeedKind.RSS) null else fetchFeed(publication).find { sameArticle(it.link, link) }
+    /**
+     * An issue: a contents page, then every story in it. Stories are fetched a few at a time; one that
+     * can't be read is kept as a short page pointing to the site rather than failing the whole issue.
+     */
+    private suspend fun issuePages(chapter: SChapter): List<String> = coroutineScope {
+        val publication = findPublication(chapter.url.substringAfter('#', ""))
+            ?: throw Exception("This magazine is no longer available as a built-in source.")
+        val stories = Issues.decode(chapter.memo)
+        if (stories.isEmpty()) throw Exception("This issue is empty. Refresh the magazine and try again.")
+        val feed = feedFor(publication)
+        val permits = Semaphore(ISSUE_FETCH_CONCURRENCY)
+        val articles = stories.map { story ->
+            async {
+                permits.withPermit {
+                    try {
+                        loadArticle(publication, story, feed)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        Article(
+                            title = story.title.ifBlank { ArticleExtractor.titleFromUrl(story.link) },
+                            author = null,
+                            date = story.date,
+                            leadImage = story.image,
+                            blocks = listOf(
+                                ArticleBlock.Caption(
+                                    "This story couldn't be loaded here. It's at ${story.link} - " +
+                                        "open the magazine in WebView to read it on the site.",
+                                ),
+                            ),
+                        )
+                    }
+                }
+            }
+        }.awaitAll()
+
+        val contents = Article(
+            title = Issues.label(Issues.keyOf(chapter.url)),
+            author = null,
+            date = null,
+            leadImage = articles.firstNotNullOfOrNull { it.leadImage },
+            blocks = articles.map { ArticleBlock.ListItem(it.title) },
+        )
+        val pages = MagazinePages.paginate(
+            contents,
+            publication,
+            byline = if (articles.size == 1) "1 story" else "${articles.size} stories",
+        ).toMutableList()
+        for (article in articles) {
+            pages += MagazinePages.paginate(article, publication, firstPageNumber = pages.size + 1)
+        }
+        pages
+    }
+
+    /** The feed's current stories by address (RSS only: they may carry whole articles), or none. */
+    private suspend fun feedFor(publication: Publication): Map<String, FeedItem> {
+        if (publication.kind != FeedKind.RSS) return emptyMap()
+        return try {
+            fetchFeed(publication).associateBy { normalize(it.link) }
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
-            null
+            emptyMap()
         }
+    }
+
+    private suspend fun loadArticle(publication: Publication, story: ArticleRef, feed: Map<String, FeedItem>): Article {
+        // The feed often has the whole article (and is cheaper than the web page); look there first.
+        val link = story.link
+        val item = feed[normalize(link)]
         val fromFeed = item?.let(ArticleExtractor::fromFeedItem)
         if (fromFeed != null && ArticleExtractor.isComplete(fromFeed)) return fromFeed
 
         val fallback = item ?: FeedItem(
             // A title made up from the address is left out, so the page's own headline is used
-            title = chapter.name.takeUnless { hasMadeUpTitle(chapter) }.orEmpty(),
+            title = story.title.takeUnless { hasMadeUpTitle(it, link) }.orEmpty(),
             link = link,
-            date = chapter.date_upload.takeIf { it > 0 },
+            date = story.date.takeIf { it > 0 },
             author = null,
             imageUrl = null,
             summary = null,
@@ -323,7 +417,7 @@ abstract class ModernMagazineSource(
             val excerpt = fromFeed ?: throw e
             return excerpt.copy(
                 blocks = excerpt.blocks + ArticleBlock.Caption(
-                    "The rest of this story is on ${hostOf(link)}. Open this chapter in WebView to keep reading.",
+                    "The rest of this story is on ${hostOf(link)}. Open it in WebView to keep reading.",
                 ),
             )
         }
@@ -345,13 +439,13 @@ abstract class ModernMagazineSource(
     }
 
     /** Replaces made-up titles with each article's own headline, a few pages at a time. */
-    private suspend fun fillInTitles(chapters: List<SChapter>) = coroutineScope {
-        chapters.chunked(TITLE_LOOKUP_BATCH).forEach { batch ->
-            batch.map { chapter ->
+    private suspend fun fillInTitles(articles: List<ArticleRef>) = coroutineScope {
+        articles.chunked(TITLE_LOOKUP_BATCH).forEach { batch ->
+            batch.map { article ->
                 async {
                     try {
-                        val html = client.newCall(GET(getChapterUrl(chapter), headers)).awaitSuccess().bodyString()
-                        ArticleExtractor.pageTitle(html)?.let { chapter.name = it }
+                        val html = client.newCall(GET(article.link, headers)).awaitSuccess().bodyString()
+                        ArticleExtractor.pageTitle(html)?.let { article.title = it }
                     } catch (e: CancellationException) {
                         throw e
                     } catch (_: Exception) {
@@ -396,10 +490,16 @@ abstract class ModernMagazineSource(
     override fun getMangaUrl(manga: SManga): String =
         findPublication(manga.url.trim('/'))?.homepage ?: getHomeUrl()
 
-    override fun getChapterUrl(chapter: SChapter): String = chapter.url.substringBefore('#')
+    override fun getChapterUrl(chapter: SChapter): String = if (Issues.isIssueUrl(chapter.url)) {
+        // An issue has no page of its own; WebView opens the magazine's site
+        findPublication(chapter.url.substringAfter('#', ""))?.homepage ?: getHomeUrl()
+    } else {
+        chapter.url.substringBefore('#')
+    }
 
     companion object {
-        private const val MAX_CHAPTERS = 3000
+        private const val MAX_ARTICLES = 3000
+        private const val ISSUE_FETCH_CONCURRENCY = 6
         private const val SITEMAP_ITEMS = 30
         private const val SITEMAP_BACKFILL = 60
         private const val ARCHIVE_PAGES = 3
@@ -407,6 +507,12 @@ abstract class ModernMagazineSource(
         private const val TITLE_LOOKUP_BATCH = 6
 
         private val MONTH = DateTimeFormatter.ofPattern("MMMM yyyy", Locale.ENGLISH)
+
+        private fun periodName(period: IssuePeriod) = when (period) {
+            IssuePeriod.MONTH -> "monthly issues"
+            IssuePeriod.WEEK -> "weekly issues"
+            IssuePeriod.DAY -> "daily editions"
+        }
 
         private fun monthLabel(millis: Long): String =
             Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).format(MONTH)
@@ -456,7 +562,9 @@ class CustomMagazines : ModernMagazineSource("Add your own", emptyList(), "Your 
         }
 
         // The address may already be a feed.
-        ArticleExtractor.parseFeedInfo(first.body, first.url)?.let { return publicationFor(first.url, it, null) }
+        ArticleExtractor.parseFeedInfo(first.body, first.url)?.let {
+            return publicationFor(first.url, it, null, feedBody = first.body)
+        }
 
         val page = Jsoup.parse(first.body, first.url)
         val siteName = page.selectFirst("meta[property=og:site_name]")?.attr("content")?.ifBlank { null }
@@ -475,7 +583,7 @@ class CustomMagazines : ModernMagazineSource("Add your own", emptyList(), "Your 
                 continue
             }
             val info = ArticleExtractor.parseFeedInfo(response.body, response.url) ?: continue
-            return publicationFor(response.url, info, siteName, homepage = first.url)
+            return publicationFor(response.url, info, siteName, homepage = first.url, feedBody = response.body)
         }
         throw Exception(
             "Couldn't find a feed on ${address.host}. If the site has an RSS link (often ending in /feed or " +
@@ -483,11 +591,25 @@ class CustomMagazines : ModernMagazineSource("Add your own", emptyList(), "Your 
         )
     }
 
-    private fun publicationFor(feed: String, info: FeedInfo, siteName: String?, homepage: String? = null): Publication {
+    private fun publicationFor(
+        feed: String,
+        info: FeedInfo,
+        siteName: String?,
+        homepage: String? = null,
+        feedBody: String,
+    ): Publication {
         val site = info.homepage ?: homepage ?: feed.toHttpUrl().let { "${it.scheme}://${it.host}/" }
         val host = CustomPublications.hostOf(site)
         val name = cleanName(siteName, host) ?: cleanName(info.title, host) ?: host
-        return CustomPublications.create(feed, name, site, info.description)
+        return CustomPublications.create(feed, name, site, info.description, issuePeriodFor(feedBody, feed))
+    }
+
+    /** Issue size from how often the feed's stories come out, so a busy site gets weekly or daily issues. */
+    private fun issuePeriodFor(feedBody: String, feed: String): IssuePeriod {
+        val dates = ArticleExtractor.parseFeed(feedBody, feed).mapNotNull { it.date }
+        if (dates.size < 3) return IssuePeriod.MONTH
+        val spanDays = ((dates.max() - dates.min()) / 86_400_000.0).coerceAtLeast(0.25)
+        return IssuePeriod.forRate(dates.size / spanDays * 30)
     }
 
     private class Fetched(val url: String, val body: String)
