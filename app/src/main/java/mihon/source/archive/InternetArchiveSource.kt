@@ -424,4 +424,42 @@ object BuiltinSources {
 
     /** Content type for entries from a built-in source, or null if the source isn't one of them. */
     fun contentTypeOf(sourceId: Long): LibraryContentType? = contentTypes[sourceId]
+
+    private val icons: Map<Long, BuiltinSourceIcon> by lazy {
+        val magazineIcons = listOf(
+            BuiltinSourceIcon.STYLE,
+            BuiltinSourceIcon.CARS,
+            BuiltinSourceIcon.DESIGN,
+            BuiltinSourceIcon.ART,
+            BuiltinSourceIcon.TECH,
+            BuiltinSourceIcon.TRAVEL,
+            BuiltinSourceIcon.INTERIORS,
+            BuiltinSourceIcon.CUSTOM,
+        )
+        magazines.zip(magazineIcons).associate { (source, icon) -> source.id to icon } +
+            archive.associate { source ->
+                source.id to if (source.contentType == LibraryContentType.BOOK) {
+                    BuiltinSourceIcon.ARCHIVE_BOOKS
+                } else {
+                    BuiltinSourceIcon.ARCHIVE_MAGAZINES
+                }
+            }
+    }
+
+    /** The icon Browse shows for a built-in source, or null if the source isn't one of them. */
+    fun iconOf(sourceId: Long): BuiltinSourceIcon? = icons[sourceId]
+}
+
+/** Which picture a built-in source is shown with. */
+enum class BuiltinSourceIcon {
+    STYLE,
+    CARS,
+    DESIGN,
+    ART,
+    TECH,
+    TRAVEL,
+    INTERIORS,
+    CUSTOM,
+    ARCHIVE_MAGAZINES,
+    ARCHIVE_BOOKS,
 }

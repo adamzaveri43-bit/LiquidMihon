@@ -184,6 +184,7 @@ class LocalSource(
             } catch (e: Throwable) {
                 logcat(LogPriority.ERROR, e) { "Error setting book details from metadata for ${manga.title}" }
             }
+            manga.addBookTag()
             return@withContext manga
         }
 
@@ -246,7 +247,19 @@ class LocalSource(
             logcat(LogPriority.ERROR, e) { "Error setting manga details from local metadata for ${manga.title}" }
         }
 
+        // A folder of PDFs and EPUBs is a book (or a series of them), so the library files it under Books
+        val chapterFiles = fileSystem.getFilesInMangaDirectory(manga.url)
+            .filterNot { it.name.orEmpty().startsWith('.') }
+            .filter { Format.isSupported(it) }
+        if (chapterFiles.isNotEmpty() && chapterFiles.all { Format.isBook(it) }) manga.addBookTag()
+
         return@withContext manga
+    }
+
+    /** Adds the "Book" genre tag the library uses to file an entry under Books, keeping existing tags. */
+    private fun SManga.addBookTag() {
+        val tags = genre?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }.orEmpty()
+        if (tags.none { it.equals(BOOK_TAG, ignoreCase = true) }) genre = (tags + BOOK_TAG).joinToString()
     }
 
     private fun <T> getComicInfoForChapter(chapter: UniFile, block: (InputStream) -> T): T? {
@@ -439,6 +452,13 @@ class LocalSource(
     companion object {
         const val ID = 0L
         const val HELP_URL = "https://mihon.app/docs/guides/local-source/"
+
+        /** Genre tag that files a local entry under Books in the library. */
+        const val BOOK_TAG = "Book"
+
+        /** Whether an entry's address is a single PDF or EPUB placed directly in the local source folder. */
+        fun isBookUrl(url: String): Boolean = url.endsWith(".epub", ignoreCase = true) ||
+            url.endsWith(".pdf", ignoreCase = true)
 
         private val LATEST_THRESHOLD = 7.days.inWholeMilliseconds
     }

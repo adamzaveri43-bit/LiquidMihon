@@ -18,6 +18,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Protocol
@@ -46,6 +47,8 @@ internal object MagazinePages {
     private const val MARGIN_BOTTOM = 140
     private const val CONTENT_WIDTH = WIDTH - MARGIN_X * 2
     private const val QUOTE_INDENT = 36
+    private const val COVER_WIDTH = 720
+    private const val COVER_HEIGHT = 1032
     private const val KEEP_WITH_NEXT = 120
 
     private const val PAPER = 0xFFFBF8F3.toInt()
@@ -320,6 +323,104 @@ internal object MagazinePages {
         return bitmap.toPng()
     }
 
+    /**
+     * A newsstand-style cover: [photo] full-bleed, the masthead across the top, and the issue month
+     * and latest headline as a cover line at the bottom.
+     */
+    @Synchronized
+    fun renderPhotoCover(publication: Publication, photo: Bitmap, issue: String?, headline: String?): ByteArray {
+        val width = COVER_WIDTH
+        val height = COVER_HEIGHT
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        canvas.drawColor(publication.color or 0xFF000000.toInt())
+
+        // Centre-crop the photo to the cover's shape
+        val scale = maxOf(width / photo.width.toFloat(), height / photo.height.toFloat())
+        val srcWidth = width / scale
+        val srcHeight = height / scale
+        val left = (photo.width - srcWidth) / 2f
+        val top = (photo.height - srcHeight) / 3f // favour the upper part, where faces and cars usually are
+        canvas.drawBitmap(
+            photo,
+            android.graphics.Rect(left.toInt(), top.toInt(), (left + srcWidth).toInt(), (top + srcHeight).toInt()),
+            android.graphics.Rect(0, 0, width, height),
+            Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG),
+        )
+
+        // Shade the top and bottom so the white type reads on any photo
+        val shade = Paint()
+        shade.shader = android.graphics.LinearGradient(
+            0f,
+            0f,
+            0f,
+            height * 0.38f,
+            0xA6000000.toInt(),
+            0x00000000,
+            android.graphics.Shader.TileMode.CLAMP,
+        )
+        canvas.drawRect(0f, 0f, width.toFloat(), height * 0.38f, shade)
+        shade.shader = android.graphics.LinearGradient(
+            0f,
+            height * 0.55f,
+            0f,
+            height.toFloat(),
+            0x00000000,
+            0xD9000000.toInt(),
+            android.graphics.Shader.TileMode.CLAMP,
+        )
+        canvas.drawRect(0f, height * 0.55f, width.toFloat(), height.toFloat(), shade)
+
+        val margin = 44f
+        val innerWidth = (width - margin * 2).toInt()
+        val masthead = textPaint(170f, Typeface.create(Typeface.SERIF, Typeface.BOLD), Color.WHITE).apply {
+            setShadowLayer(12f, 0f, 2f, 0x66000000)
+        }
+        val longestWord = publication.name.split(' ').maxBy { masthead.measureText(it) }
+        while (masthead.textSize > 56f && masthead.measureText(longestWord) > innerWidth) masthead.textSize -= 4f
+        var mastheadLayout = makeLayout(publication.name, masthead, innerWidth)
+        while (mastheadLayout.lineCount > 2 && masthead.textSize > 56f) {
+            masthead.textSize -= 6f
+            mastheadLayout = makeLayout(publication.name, masthead, innerWidth)
+        }
+        drawLayout(canvas, mastheadLayout, margin, 40f)
+
+        val headlinePaint = textPaint(46f, Typeface.create(Typeface.SERIF, Typeface.BOLD), Color.WHITE).apply {
+            setShadowLayer(8f, 0f, 1f, 0x80000000.toInt())
+        }
+        var headlineLayout = headline?.let { makeLayout(it, headlinePaint, innerWidth, extra = 4f) }
+        while (headlineLayout != null && headlineLayout.lineCount > 4 && headlinePaint.textSize > 30f) {
+            headlinePaint.textSize -= 4f
+            headlineLayout = makeLayout(headline!!, headlinePaint, innerWidth, extra = 4f)
+        }
+        var y = height - 52f - (headlineLayout?.height ?: 0)
+        if (issue != null) {
+            val issuePaint = textPaint(26f, Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD), Color.WHITE).apply {
+                letterSpacing = 0.22f
+            }
+            val issueLayout = makeLayout(issue.uppercase(), issuePaint, innerWidth)
+            val issueTop = y - issueLayout.height - 18f
+            val accent = Paint().apply { color = accentFor(publication.color) }
+            canvas.drawRect(margin, issueTop - 16f, margin + 64f, issueTop - 10f, accent)
+            drawLayout(canvas, issueLayout, margin, issueTop)
+        }
+        headlineLayout?.let { y = drawLayout(canvas, it, margin, y) }
+        return bitmap.toPng()
+    }
+
+    /** Decodes a downloaded photo at about cover size, or null if it isn't an image Android can read. */
+    fun decodePhoto(bytes: ByteArray): Bitmap? {
+        val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+        var sample = 1
+        while (bounds.outWidth / (sample * 2) >= COVER_WIDTH && bounds.outHeight / (sample * 2) >= COVER_HEIGHT) {
+            sample *= 2
+        }
+        val options = android.graphics.BitmapFactory.Options().apply { inSampleSize = sample }
+        return android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+    }
+
     private fun drawLayout(canvas: Canvas, layout: StaticLayout, x: Float, y: Float): Float {
         canvas.save()
         canvas.translate(x, y)
@@ -355,7 +456,21 @@ internal object MagazinePages {
 
     // ---- URLs -----------------------------------------------------------------------------------
 
-    fun coverUrl(publication: Publication) = "https://$HOST/cover/${publication.slug}?v=1"
+    /**
+     * The cover for [publication]: plain with just the masthead, or a photo cover when the latest
+     * story's [photo] is known (with its [headline] and [issue] month as cover lines).
+     */
+    fun coverUrl(publication: Publication, photo: String? = null, issue: String? = null, headline: String? = null) =
+        "https://$HOST/cover/${publication.slug}".toHttpUrl().newBuilder().apply {
+            addQueryParameter("v", "2")
+            if (photo != null) {
+                addQueryParameter("img", photo)
+                issue?.let { addQueryParameter("issue", it) }
+                headline?.let { addQueryParameter("h", it.take(MAX_COVER_LINE)) }
+            }
+        }.build().toString()
+
+    private const val MAX_COVER_LINE = 140
 
     private fun String.isTextPage() = startsWith("https://$HOST/page/")
 
@@ -422,6 +537,16 @@ internal object MagazinePages {
     object RenderInterceptor : Interceptor {
         private val png = "image/png".toMediaType()
 
+        /** The cover photo, fetched with the same headers as the cover request; null if it can't be had. */
+        private fun downloadPhoto(chain: Interceptor.Chain, url: String): Bitmap? = try {
+            val photoRequest = chain.request().newBuilder().url(url).build()
+            chain.proceed(photoRequest).use { response ->
+                if (response.isSuccessful) decodePhoto(response.body.bytes()) else null
+            }
+        } catch (_: Exception) {
+            null
+        }
+
         override fun intercept(chain: Interceptor.Chain): Response {
             val request = chain.request()
             if (request.url.host != HOST) return chain.proceed(request)
@@ -431,11 +556,28 @@ internal object MagazinePages {
                 "cover" -> {
                     val slug = segments.drop(1).joinToString("/")
                     val custom = CustomPublications.fromSlug(slug)
-                    if (custom != null) {
-                        renderCover(custom, CustomPublications.hostOf(custom.homepage))
+                    val (publication, shelf) = if (custom != null) {
+                        custom to CustomPublications.hostOf(custom.homepage)
                     } else {
                         MagazineCategory.entries.firstNotNullOfOrNull { category ->
-                            category.publications.find { it.slug == slug }?.let { renderCover(it, category.title) }
+                            category.publications.find { it.slug == slug }?.let { it to category.title }
+                        } ?: (null to "")
+                    }
+                    publication?.let {
+                        val photo = request.url.queryParameter("img")?.let { url -> downloadPhoto(chain, url) }
+                        if (photo != null) {
+                            try {
+                                renderPhotoCover(
+                                    it,
+                                    photo,
+                                    issue = request.url.queryParameter("issue"),
+                                    headline = request.url.queryParameter("h"),
+                                )
+                            } finally {
+                                photo.recycle()
+                            }
+                        } else {
+                            renderCover(it, shelf)
                         }
                     }
                 }

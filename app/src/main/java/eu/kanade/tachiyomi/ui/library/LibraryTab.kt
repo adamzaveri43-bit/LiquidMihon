@@ -244,6 +244,7 @@ data object LibraryTab : Tab {
                                 navigator.push(MigrationConfigScreen(selection))
                             },
                             onFolderClicked = viewModel::openAddToFolderDialog,
+                            onSetContentTypeClicked = viewModel::openSetContentTypeDialog,
                         )
                     },
                     snackbarHost = { GlassSnackbarHost(hostState = snackbarHostState) },
@@ -273,8 +274,8 @@ data object LibraryTab : Tab {
                                 selection = state.selection,
                                 contentPadding = contentPadding,
                                 currentPage = state.coercedActiveCategoryIndex,
-                                // A picked section can leave a category empty; show "no matches" instead of "empty"
-                                hasActiveFilters = state.hasActiveFilters || state.libraryData.contentType != null,
+                                // A section can leave a category empty; show "no matches" instead of "empty"
+                                hasActiveFilters = true,
                                 showPageTabs = state.showCategoryTabs || !state.searchQuery.isNullOrEmpty(),
                                 onChangeCurrentPage = viewModel::updateActiveCategoryIndex,
                                 onClickManga = { navigator.push(MangaScreen(it)) },

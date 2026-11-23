@@ -23,7 +23,6 @@ import okhttp3.Response
 import org.jsoup.Jsoup
 import tachiyomi.domain.library.model.LibraryContentType
 import java.time.Instant
-import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
@@ -105,6 +104,18 @@ abstract class ModernMagazineSource(
         fetchChapters: Boolean,
     ): SMangaUpdate {
         val publication = publicationOf(manga.url)
+        val latest = when {
+            fetchChapters -> fetchFeed(publication)
+            // Details alone only want the latest story for the cover; without it the plain masthead does.
+            fetchDetails -> try {
+                fetchFeed(publication)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                emptyList()
+            }
+            else -> emptyList()
+        }
 
         val details = if (fetchDetails) {
             SManga.create().apply {
@@ -119,7 +130,7 @@ abstract class ModernMagazineSource(
                 }
                 genre = listOf("Magazine", shelfLabel).joinToString()
                 status = SManga.ONGOING
-                thumbnail_url = MagazinePages.coverUrl(publication)
+                thumbnail_url = coverFor(publication, latest)
                 update_strategy = UpdateStrategy.ALWAYS_UPDATE
                 initialized = true
             }
@@ -128,7 +139,6 @@ abstract class ModernMagazineSource(
         }
 
         val chapterList = if (fetchChapters) {
-            val latest = fetchFeed(publication)
             // Older stories are a bonus: if the archive can't be reached, the latest ones still load.
             val older = try {
                 fetchArchive(publication, known = chapters, latest = latest)
@@ -145,6 +155,19 @@ abstract class ModernMagazineSource(
         return SMangaUpdate(details, chapterList)
     }
 
+    /** A photo cover from the newest story that has a picture, or the plain masthead if none do. */
+    private fun coverFor(publication: Publication, latest: List<FeedItem>): String {
+        val lead = latest.sortedByDescending { it.date ?: 0L }.firstOrNull { it.imageUrl != null }
+            ?: return MagazinePages.coverUrl(publication)
+        return MagazinePages.coverUrl(
+            publication,
+            photo = lead.imageUrl,
+            issue = monthLabel(lead.date ?: System.currentTimeMillis()),
+            // Sitemap listings only have titles made up from the address; those make poor cover lines
+            headline = lead.title.takeUnless { publication.kind == FeedKind.SITEMAP },
+        )
+    }
+
     private fun FeedItem.toSChapter(publication: Publication) = SChapter.create().apply {
         // The fragment ties the article to its publication; it's never sent to the server.
         url = "${link.substringBefore('#')}#${publication.slug}"
@@ -152,7 +175,6 @@ abstract class ModernMagazineSource(
         val millis = date ?: System.currentTimeMillis()
         date_upload = millis
         scanlator = monthLabel(millis)
-        chapter_number = chapterNumber(millis)
     }
 
     /**
@@ -175,12 +197,14 @@ abstract class ModernMagazineSource(
                 if (item.date == null) {
                     chapter.date_upload = previous.date_upload
                     chapter.scanlator = previous.scanlator
-                    chapter.chapter_number = previous.chapter_number
                 }
             }
             merged[chapter.url] = chapter
         }
         val chapters = merged.values.sortedByDescending { it.date_upload }.take(MAX_CHAPTERS)
+        // Number the stories 1, 2, 3… oldest first. Articles aren't numbered issues, and numbering by date
+        // left gaps that the app reported as "missing chapters" even with the whole feed loaded.
+        chapters.forEachIndexed { index, chapter -> chapter.chapter_number = (chapters.size - index).toFloat() }
         // Fill in real headlines a batch at a time, newest first; later refreshes do the rest.
         fillInTitles(chapters.filter(::hasMadeUpTitle).take(MAX_TITLE_LOOKUPS))
         return chapters
@@ -383,21 +407,9 @@ abstract class ModernMagazineSource(
         private const val TITLE_LOOKUP_BATCH = 6
 
         private val MONTH = DateTimeFormatter.ofPattern("MMMM yyyy", Locale.ENGLISH)
-        private val EPOCH_2000: Long = LocalDate.of(2000, 1, 1).toEpochDay()
 
         private fun monthLabel(millis: Long): String =
             Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).format(MONTH)
-
-        /**
-         * Days since 2000 with the time of day as the fraction: always increasing, so "next chapter"
-         * and number sorting follow publication order, and small enough to stay exact as a Float.
-         */
-        private fun chapterNumber(millis: Long): Float {
-            val time = Instant.ofEpochMilli(millis).atZone(ZoneOffset.UTC)
-            val day = time.toLocalDate().toEpochDay() - EPOCH_2000
-            val fraction = time.toLocalTime().toSecondOfDay() / 86_400f
-            return day + (fraction * 100).toInt() / 100f
-        }
     }
 }
 

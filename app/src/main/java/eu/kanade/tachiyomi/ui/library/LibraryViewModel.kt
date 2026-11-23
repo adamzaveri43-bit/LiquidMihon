@@ -84,6 +84,7 @@ import tachiyomi.domain.manga.model.applyFilter
 import tachiyomi.domain.source.service.SourceManager
 import tachiyomi.domain.track.interactor.GetTracksPerManga
 import tachiyomi.domain.track.model.Track
+import tachiyomi.source.local.LocalSource
 import tachiyomi.source.local.isLocal
 import java.io.File
 import kotlin.random.Random
@@ -124,9 +125,9 @@ class LibraryViewModel(
 
     private val activeCategoryIndex = MutableStateFlow(libraryPreferences.lastUsedCategory.get())
 
-    /** Library section being shown, or null for everything. */
+    /** Library section being shown. The library is always split by type; it starts on Manga. */
     private val contentTypeFilter = libraryPreferences.contentTypeFilter.changes()
-        .map { raw -> LibraryContentType.entries.find { it.name == raw } }
+        .map { raw -> LibraryContentType.entries.find { it.name == raw } ?: LibraryContentType.MANGA }
         .distinctUntilChanged()
 
     /** The folder being looked into, if any. */
@@ -196,11 +197,7 @@ class LibraryViewModel(
         val contentTypeCounts = LibraryContentType.entries.associateWith { type ->
             matchingFavorites.count { it.contentType == type }
         }
-        val filteredFavorites = if (contentType == null) {
-            matchingFavorites
-        } else {
-            matchingFavorites.fastFilter { it.contentType == contentType }
-        }
+        val filteredFavorites = matchingFavorites.fastFilter { it.contentType == contentType }
 
         LibraryData(
             isInitialized = true,
@@ -500,7 +497,11 @@ class LibraryViewModel(
                     sourceLanguage = source.lang,
                     contentType = LibraryContentType.classify(
                         override = contentTypeOverrides[manga.id],
-                        sourceType = BuiltinSources.contentTypeOf(manga.manga.source),
+                        sourceType = BuiltinSources.contentTypeOf(manga.manga.source)
+                            // A PDF or EPUB dropped into the local source is a book
+                            ?: LibraryContentType.BOOK.takeIf {
+                                manga.manga.isLocal() && LocalSource.isBookUrl(manga.manga.url)
+                            },
                         genres = manga.manga.genre,
                     ),
                     badges = LibraryItem.Badges(
@@ -814,8 +815,8 @@ class LibraryViewModel(
         dialog.update { Dialog.DeleteManga(selectedManga) }
     }
 
-    fun setContentTypeFilter(type: LibraryContentType?) {
-        libraryPreferences.contentTypeFilter.set(type?.name.orEmpty())
+    fun setContentTypeFilter(type: LibraryContentType) {
+        libraryPreferences.contentTypeFilter.set(type.name)
     }
 
     fun openSetContentTypeDialog() {
@@ -1046,7 +1047,7 @@ class LibraryViewModel(
         val favorites: List<LibraryItem> = emptyList(),
         val tracksMap: Map</* Manga */ Long, List<Track>> = emptyMap(),
         val loggedInTrackerIds: Set<Long> = emptySet(),
-        val contentType: LibraryContentType? = null,
+        val contentType: LibraryContentType = LibraryContentType.MANGA,
         val contentTypeCounts: Map<LibraryContentType, Int> = emptyMap(),
         val totalFavoriteCount: Int = 0,
         val customOrder: List<String> = emptyList(),

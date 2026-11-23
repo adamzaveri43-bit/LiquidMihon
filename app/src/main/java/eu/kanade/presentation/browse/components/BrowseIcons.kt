@@ -2,10 +2,15 @@ package eu.kanade.presentation.browse.components
 
 import android.util.DisplayMetrics
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -20,8 +25,20 @@ import eu.kanade.tachiyomi.data.coil.InstalledExtensionIcon
 import eu.kanade.tachiyomi.data.coil.InstalledSourceIcon
 import eu.kanade.tachiyomi.extension.model.Extension
 import mihon.icons.materialsymbols.MaterialSymbols
+import mihon.icons.materialsymbols.rounded.Architecture
+import mihon.icons.materialsymbols.rounded.Chair
+import mihon.icons.materialsymbols.rounded.Checkroom
+import mihon.icons.materialsymbols.rounded.DirectionsCar
+import mihon.icons.materialsymbols.rounded.Flight
+import mihon.icons.materialsymbols.rounded.LibraryAdd
+import mihon.icons.materialsymbols.rounded.LocalLibrary
+import mihon.icons.materialsymbols.rounded.Memory
+import mihon.icons.materialsymbols.rounded.Newspaper
+import mihon.icons.materialsymbols.rounded.Palette
 import mihon.icons.materialsymbols.roundedfilled.Dangerous
 import mihon.icons.materialsymbols.roundedfilled.Warning
+import mihon.source.archive.BuiltinSourceIcon
+import mihon.source.archive.BuiltinSources
 import tachiyomi.domain.source.model.Source
 import tachiyomi.source.local.isLocal
 
@@ -42,6 +59,9 @@ fun SourceIcon(
                 colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.error),
                 modifier = modifier.then(defaultModifier),
             )
+        }
+        BuiltinSources.iconOf(source.id) != null -> {
+            BuiltinIcon(BuiltinSources.iconOf(source.id)!!, modifier.then(defaultModifier))
         }
         source.isLocal() -> {
             Image(
@@ -95,6 +115,36 @@ fun ExtensionIcon(
             contentDescription = null,
             colorFilter = ColorFilter.tint(MaterialTheme.colorScheme.error),
             modifier = modifier.then(defaultModifier),
+        )
+    }
+}
+
+/** A built-in source's tile: its own symbol on a colored rounded square. */
+@Composable
+private fun BuiltinIcon(icon: BuiltinSourceIcon, modifier: Modifier) {
+    val (vector, color) = when (icon) {
+        BuiltinSourceIcon.STYLE -> MaterialSymbols.Rounded.Checkroom to Color(0xFF3A3A44)
+        BuiltinSourceIcon.CARS -> MaterialSymbols.Rounded.DirectionsCar to Color(0xFFC62828)
+        BuiltinSourceIcon.DESIGN -> MaterialSymbols.Rounded.Architecture to Color(0xFF00897B)
+        BuiltinSourceIcon.ART -> MaterialSymbols.Rounded.Palette to Color(0xFF8E24AA)
+        BuiltinSourceIcon.TECH -> MaterialSymbols.Rounded.Memory to Color(0xFF1565C0)
+        BuiltinSourceIcon.TRAVEL -> MaterialSymbols.Rounded.Flight to Color(0xFF0288D1)
+        BuiltinSourceIcon.INTERIORS -> MaterialSymbols.Rounded.Chair to Color(0xFF8D6E63)
+        BuiltinSourceIcon.CUSTOM -> MaterialSymbols.Rounded.LibraryAdd to Color(0xFF546E7A)
+        BuiltinSourceIcon.ARCHIVE_MAGAZINES -> MaterialSymbols.Rounded.Newspaper to Color(0xFF5D4037)
+        BuiltinSourceIcon.ARCHIVE_BOOKS -> MaterialSymbols.Rounded.LocalLibrary to Color(0xFF6D4C41)
+    }
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(22))
+            .background(color),
+        contentAlignment = Alignment.Center,
+    ) {
+        Image(
+            imageVector = vector,
+            contentDescription = null,
+            colorFilter = ColorFilter.tint(Color.White),
+            modifier = Modifier.fillMaxSize(0.62f),
         )
     }
 }

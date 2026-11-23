@@ -65,6 +65,7 @@ import mihon.icons.materialsymbols.rounded.Download
 import mihon.icons.materialsymbols.rounded.Folder
 import mihon.icons.materialsymbols.rounded.MoreVert
 import mihon.icons.materialsymbols.rounded.RemoveDone
+import mihon.icons.materialsymbols.rounded.Sell
 import mihon.icons.materialsymbols.rounded.SwapCalls
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.glass.LiquidGlassDefaults
@@ -244,6 +245,7 @@ fun LibraryBottomActionMenu(
     onMigrateClicked: () -> Unit,
     onFolderClicked: () -> Unit,
     modifier: Modifier = Modifier,
+    onSetContentTypeClicked: (() -> Unit)? = null,
 ) {
     AnimatedVisibility(
         visible = visible,
@@ -253,7 +255,7 @@ fun LibraryBottomActionMenu(
         val scope = rememberCoroutineScope()
         ActionMenuSurface(modifier = modifier) {
             val haptic = LocalHapticFeedback.current
-            val confirm = remember { mutableStateListOf(false, false, false, false, false, false, false) }
+            val confirm = remember { mutableStateListOf(false, false, false, false, false, false, false, false) }
             var resetJob by remember { mutableStateOf<Job?>(null) }
             val onLongClickItem: (Int) -> Unit = { toConfirmIndex ->
                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -301,6 +303,15 @@ fun LibraryBottomActionMenu(
                     onLongClick = { onLongClickItem(6) },
                     onClick = onFolderClicked,
                 )
+                if (onSetContentTypeClicked != null) {
+                    Button(
+                        title = stringResource(MR.strings.action_set_content_type),
+                        icon = MaterialSymbols.Rounded.Sell,
+                        toConfirm = confirm[7],
+                        onLongClick = { onLongClickItem(7) },
+                        onClick = onSetContentTypeClicked,
+                    )
+                }
                 if (onDownloadClicked != null) {
                     var downloadExpanded by remember { mutableStateOf(false) }
                     Button(

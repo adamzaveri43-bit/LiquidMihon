@@ -57,21 +57,21 @@ private val IndicatorInset = 4.dp
 private const val INDICATOR_LEADING_STIFFNESS = 2500f
 
 /**
- * Floating glass capsule that splits the library into Manga, Books and Magazines. The selected section sits
+ * Floating glass capsule that switches the library between Manga, Books and Magazines, which are kept apart. The selected section sits
  * in a glass droplet that stretches towards the next one as you switch, like the navigation bar. Without
  * Liquid Glass it's drawn as a plain tonal capsule with the same layout.
  *
- * @param selected the section being shown, or null for the whole library
+ * @param selected the section being shown
  * @param counts how many entries of each type match the current search and filters
  */
 @Composable
 fun LibraryContentTypeBar(
-    selected: LibraryContentType?,
+    selected: LibraryContentType,
     counts: Map<LibraryContentType, Int>,
-    onSelect: (LibraryContentType?) -> Unit,
+    onSelect: (LibraryContentType) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val sections = remember { listOf<LibraryContentType?>(null) + LibraryContentType.entries }
+    val sections = LibraryContentType.entries
     val selectedIndex = sections.indexOf(selected).coerceAtLeast(0)
     val glass = LocalLiquidGlass.current
     val glassColors = LiquidGlassDefaults.colors()
@@ -141,8 +141,8 @@ fun LibraryContentTypeBar(
         ) {
             sections.forEach { type ->
                 SectionItem(
-                    label = stringResource(type?.sectionLabel ?: MR.strings.content_type_all),
-                    count = if (type == null) counts.values.sum() else counts[type] ?: 0,
+                    label = stringResource(type.sectionLabel),
+                    count = counts[type] ?: 0,
                     selected = type == selected,
                     onClick = { onSelect(type) },
                 )
