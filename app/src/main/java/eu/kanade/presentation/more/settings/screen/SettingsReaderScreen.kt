@@ -71,6 +71,44 @@ object SettingsReaderScreen : SearchableSettings {
             getWebtoonGroup(readerPreferences = readerPref),
             getNavigationGroup(readerPreferences = readerPref),
             getActionsGroup(readerPreferences = readerPref),
+            getBooksGroup(readerPreferences = readerPref),
+        )
+    }
+
+    @Composable
+    private fun getBooksGroup(readerPreferences: ReaderPreferences): Preference.PreferenceGroup {
+        return Preference.PreferenceGroup(
+            title = stringResource(MR.strings.pref_category_books),
+            preferenceItems = listOf(
+                Preference.PreferenceItem.InfoPreference(stringResource(MR.strings.pref_books_info)),
+                Preference.PreferenceItem.SliderPreference(
+                    preference = readerPreferences.bookTextSize,
+                    valueRange = 12..32,
+                    title = stringResource(MR.strings.pref_book_text_size),
+                    valueText = { "$it sp" },
+                ),
+                Preference.PreferenceItem.SliderPreference(
+                    preference = readerPreferences.bookLineSpacing,
+                    valueRange = 100..220 step 10,
+                    title = stringResource(MR.strings.pref_book_line_spacing),
+                    valueText = { "${it / 100f}×" },
+                ),
+                Preference.PreferenceItem.SliderPreference(
+                    preference = readerPreferences.bookMargins,
+                    valueRange = 0..20,
+                    title = stringResource(MR.strings.pref_book_margins),
+                    valueText = { "$it%" },
+                ),
+                Preference.PreferenceItem.ListPreference(
+                    preference = readerPreferences.bookFont,
+                    entries = ReaderPreferences.BookFont.entries.associateWith { stringResource(it.titleRes) },
+                    title = stringResource(MR.strings.pref_book_font),
+                ),
+                Preference.PreferenceItem.SwitchPreference(
+                    preference = readerPreferences.bookJustify,
+                    title = stringResource(MR.strings.pref_book_justify),
+                ),
+            ),
         )
     }
 

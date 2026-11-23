@@ -2,7 +2,6 @@ package eu.kanade.presentation.reader.appbars
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
-import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -16,6 +15,7 @@ import mihon.icons.materialsymbols.MaterialSymbols
 import mihon.icons.materialsymbols.rounded.Crop
 import mihon.icons.materialsymbols.rounded.Settings
 import tachiyomi.i18n.MR
+import tachiyomi.presentation.core.components.material.Icon
 import tachiyomi.presentation.core.i18n.stringResource
 
 @Composable

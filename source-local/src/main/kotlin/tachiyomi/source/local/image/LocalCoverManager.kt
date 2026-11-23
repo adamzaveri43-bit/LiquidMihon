@@ -22,6 +22,12 @@ class LocalCoverManager(
 ) {
 
     fun find(mangaUrl: String): UniFile? {
+        // A book file on its own keeps its cover in the shared covers folder, named after it
+        if (fileSystem.getBookFile(mangaUrl) != null) {
+            return fileSystem.getBookCoversDirectory(create = false)
+                ?.findFile(bookCoverName(mangaUrl))
+                ?.takeIf { it.isFile }
+        }
         return fileSystem.getFilesInMangaDirectory(mangaUrl)
             // Get all file whose names start with "cover"
             .filter { it.isFile && it.nameWithoutExtension.equals("cover", ignoreCase = true) }
@@ -33,13 +39,23 @@ class LocalCoverManager(
         manga: SManga,
         inputStream: InputStream,
     ): UniFile? {
-        val directory = fileSystem.getMangaDirectory(manga.url)
+        val isBookFile = fileSystem.getBookFile(manga.url) != null
+        val directory = if (isBookFile) {
+            fileSystem.getBookCoversDirectory(create = true)
+        } else {
+            fileSystem.getMangaDirectory(manga.url)
+        }
         if (directory == null) {
             inputStream.close()
             return null
         }
 
-        val targetFile = find(manga.url) ?: directory.createFile(DEFAULT_COVER_NAME)!!
+        val targetFile = find(manga.url)
+            ?: directory.createFile(if (isBookFile) bookCoverName(manga.url) else DEFAULT_COVER_NAME)
+            ?: run {
+                inputStream.close()
+                return null
+            }
 
         inputStream.use { input ->
             targetFile.openOutputStream().use { output ->
@@ -52,4 +68,6 @@ class LocalCoverManager(
         manga.thumbnail_url = targetFile.uri.toString()
         return targetFile
     }
+
+    private fun bookCoverName(bookFileName: String) = "$bookFileName.jpg"
 }

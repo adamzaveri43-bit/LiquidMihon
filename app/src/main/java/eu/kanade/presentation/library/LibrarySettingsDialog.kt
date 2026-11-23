@@ -178,6 +178,7 @@ private fun ColumnScope.SortPage(
             MR.strings.action_sort_chapter_fetch_date to LibrarySort.Type.ChapterFetchDate,
             MR.strings.action_sort_date_added to LibrarySort.Type.DateAdded,
             trackerMeanPair,
+            MR.strings.action_sort_custom to LibrarySort.Type.Custom,
             MR.strings.action_sort_random to LibrarySort.Type.Random,
         )
     }
@@ -222,6 +223,7 @@ private val displayModes = listOf(
     MR.strings.action_display_comfortable_grid to LibraryDisplayMode.ComfortableGrid,
     MR.strings.action_display_cover_only_grid to LibraryDisplayMode.CoverOnlyGrid,
     MR.strings.action_display_list to LibraryDisplayMode.List,
+    MR.strings.action_display_cover_flow to LibraryDisplayMode.CoverFlow,
 )
 
 @Composable
@@ -239,7 +241,7 @@ private fun ColumnScope.DisplayPage(
         }
     }
 
-    if (displayMode != LibraryDisplayMode.List) {
+    if (displayMode != LibraryDisplayMode.List && displayMode != LibraryDisplayMode.CoverFlow) {
         val configuration = LocalConfiguration.current
         val columnPreference = remember {
             if (configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) {
@@ -263,6 +265,8 @@ private fun ColumnScope.DisplayPage(
             pillColor = MaterialTheme.colorScheme.surfaceContainerHighest,
         )
     }
+
+    LibraryAppearanceSettings()
 
     HeadingItem(MR.strings.overlay_header)
     CheckboxItem(

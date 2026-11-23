@@ -45,6 +45,7 @@ import tachiyomi.domain.manga.model.Manga
 import tachiyomi.i18n.MR
 import tachiyomi.source.local.filter.OrderBy
 import tachiyomi.source.local.image.LocalCoverManager
+import tachiyomi.source.local.image.renderPdfCover
 import tachiyomi.source.local.io.Archive
 import tachiyomi.source.local.io.Format
 import tachiyomi.source.local.io.LocalSourceFileSystem
@@ -97,8 +98,8 @@ class LocalSource(
         }
 
         var mangaDirs = fileSystem.getFilesInBaseDirectory()
-            // Filter out files that are hidden and is not a folder
-            .filter { it.isDirectory && !it.name.orEmpty().startsWith('.') }
+            // Keep folders and books placed on their own, but not hidden files
+            .filter { (it.isDirectory || Format.isBook(it)) && !it.name.orEmpty().startsWith('.') }
             .distinctBy { it.name }
             .filter {
                 if (lastModifiedLimit == 0L && query.isBlank()) {
@@ -136,7 +137,11 @@ class LocalSource(
             .map { mangaDir ->
                 async {
                     SManga.create().apply {
-                        title = mangaDir.name.orEmpty()
+                        title = if (mangaDir.isDirectory) {
+                            mangaDir.name.orEmpty()
+                        } else {
+                            mangaDir.nameWithoutExtension.orEmpty()
+                        }
                         url = mangaDir.name.orEmpty()
 
                         // Try to find the cover
@@ -166,6 +171,20 @@ class LocalSource(
     private suspend fun getMangaDetails(manga: SManga): SManga = withContext(Dispatchers.IO) {
         coverManager.find(manga.url)?.let {
             manga.thumbnail_url = it.uri.toString()
+        }
+
+        // A book on its own carries its details in its own metadata
+        fileSystem.getBookFile(manga.url)?.let { book ->
+            try {
+                if (Format.valueOf(book) is Format.Epub) {
+                    book.epubReader(context).use { epub -> epub.fillMetadata(manga, SChapter.create()) }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                logcat(LogPriority.ERROR, e) { "Error setting book details from metadata for ${manga.title}" }
+            }
+            return@withContext manga
         }
 
         // Augment manga details based on metadata files
@@ -233,6 +252,8 @@ class LocalSource(
     private fun <T> getComicInfoForChapter(chapter: UniFile, block: (InputStream) -> T): T? {
         return if (chapter.isDirectory) {
             chapter.findFile(COMIC_INFO_FILE)?.openInputStream()?.use(block)
+        } else if (Format.isBook(chapter)) {
+            null
         } else {
             chapter.archiveReader(context).use { reader ->
                 reader.getInputStream(COMIC_INFO_FILE)?.use(block)
@@ -291,10 +312,13 @@ class LocalSource(
 
     // Chapters
     private suspend fun getChapterList(manga: SManga): List<SChapter> = withContext(Dispatchers.IO) {
-        val chapters = fileSystem.getFilesInMangaDirectory(manga.url)
+        // A book placed on its own is its only chapter
+        val chapterFiles = fileSystem.getBookFile(manga.url)?.let(::listOf)
+            ?: fileSystem.getFilesInMangaDirectory(manga.url)
+        val chapters = chapterFiles
             // Only keep supported formats
             .filterNot { it.name.orEmpty().startsWith('.') }
-            .filter { it.isDirectory || Archive.isSupported(it) || it.extension.equals("epub", true) }
+            .filter { Format.isSupported(it) }
             .map { chapterFile ->
                 SChapter.create().apply {
                     url = "${manga.url}/${chapterFile.name}"
@@ -349,9 +373,14 @@ class LocalSource(
     fun getFormat(chapter: SChapter): Format {
         try {
             val (mangaDirName, chapterName) = chapter.url.split('/', limit = 2)
-            return fileSystem.getBaseDirectory()
-                ?.findFile(mangaDirName)
-                ?.findFile(chapterName)
+            val entry = fileSystem.getBaseDirectory()?.findFile(mangaDirName)
+            // A book placed on its own is both the entry and its chapter
+            val chapterFile = if (entry != null && !entry.isDirectory && entry.name == chapterName) {
+                entry
+            } else {
+                entry?.findFile(chapterName)
+            }
+            return chapterFile
                 ?.let(Format.Companion::valueOf)
                 ?: throw Exception(context.stringResource(MR.strings.chapter_not_found))
         } catch (e: Format.UnknownFormatException) {
@@ -390,10 +419,15 @@ class LocalSource(
                 }
                 is Format.Epub -> {
                     format.file.epubReader(context).use { epub ->
-                        val entry = epub.getImagesFromPages().firstOrNull()
+                        // Books declare their cover, comics start with it
+                        val entry = epub.getCoverImagePath()?.takeIf { epub.getInputStream(it)?.use { true } == true }
+                            ?: epub.getImagesFromPages().firstOrNull()
 
                         entry?.let { coverManager.update(manga, epub.getInputStream(it)!!) }
                     }
+                }
+                is Format.Pdf -> {
+                    format.file.renderPdfCover(context)?.let { coverManager.update(manga, it) }
                 }
             }
         } catch (e: Throwable) {

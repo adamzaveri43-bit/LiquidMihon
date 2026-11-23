@@ -6,6 +6,8 @@ import android.content.Intent
 import android.provider.Settings
 import android.webkit.WebStorage
 import android.webkit.WebView
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -41,6 +43,7 @@ import eu.kanade.tachiyomi.network.PREF_DOH_QUAD101
 import eu.kanade.tachiyomi.network.PREF_DOH_QUAD9
 import eu.kanade.tachiyomi.network.PREF_DOH_SHECAN
 import eu.kanade.tachiyomi.ui.more.OnboardingScreen
+import eu.kanade.tachiyomi.util.system.GLUtil
 import eu.kanade.tachiyomi.util.system.isReleaseBuildType
 import eu.kanade.tachiyomi.util.system.isShizukuInstalled
 import eu.kanade.tachiyomi.util.system.powerManager
@@ -53,6 +56,7 @@ import kotlinx.coroutines.withContext
 import logcat.LogPriority
 import mihon.app.di.appGraph
 import okhttp3.Headers
+import tachiyomi.core.common.util.system.ImageUtil
 import tachiyomi.core.common.util.system.logcat
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.i18n.MR
@@ -92,6 +96,15 @@ object SettingsAdvancedScreen : SearchableSettings {
                 preference = networkPreferences.verboseLogging,
                 title = stringResource(MR.strings.pref_verbose_logging),
                 subtitle = stringResource(MR.strings.pref_verbose_logging_summary),
+                onValueChanged = {
+                    context.toast(MR.strings.requires_app_restart)
+                    true
+                },
+            ),
+            Preference.PreferenceItem.SwitchPreference(
+                preference = networkPreferences.redactSensitiveHeaders,
+                title = stringResource(MR.strings.pref_redact_sensitive_headers),
+                subtitle = stringResource(MR.strings.pref_redact_sensitive_headers_summary),
                 onValueChanged = {
                     context.toast(MR.strings.requires_app_restart)
                     true
@@ -333,12 +346,43 @@ object SettingsAdvancedScreen : SearchableSettings {
         basePreferences: BasePreferences,
     ): Preference.PreferenceGroup {
         val context = LocalContext.current
+        val chooseColorProfile = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.OpenDocument(),
+        ) { uri ->
+            uri?.let {
+                val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+                context.contentResolver.takePersistableUriPermission(uri, flags)
+                basePreferences.displayProfile.set(uri.toString())
+            }
+        }
         return Preference.PreferenceGroup(
             title = stringResource(MR.strings.pref_category_reader),
             preferenceItems = listOf(
-                Preference.PreferenceItem.SwitchPreference(
-                    preference = basePreferences.highQualityRenderer,
-                    title = stringResource(MR.strings.pref_high_quality_renderer),
+                Preference.PreferenceItem.ListPreference(
+                    preference = basePreferences.hardwareBitmapThreshold,
+                    entries = GLUtil.CUSTOM_TEXTURE_LIMIT_OPTIONS
+                        .mapIndexed { index, option ->
+                            val display = if (index == 0) {
+                                stringResource(MR.strings.pref_hardware_bitmap_threshold_default, option)
+                            } else {
+                                option.toString()
+                            }
+                            option to display
+                        }
+                        .toMap(),
+                    title = stringResource(MR.strings.pref_hardware_bitmap_threshold),
+                    subtitleProvider = { value, options ->
+                        stringResource(MR.strings.pref_hardware_bitmap_threshold_summary, options[value].orEmpty())
+                    },
+                    visible = !ImageUtil.HARDWARE_BITMAP_UNSUPPORTED &&
+                        GLUtil.DEVICE_TEXTURE_LIMIT > GLUtil.SAFE_TEXTURE_LIMIT,
+                ),
+                Preference.PreferenceItem.TextPreference(
+                    title = stringResource(MR.strings.pref_display_profile),
+                    subtitle = basePreferences.displayProfile.get(),
+                    onClick = {
+                        chooseColorProfile.launch(arrayOf("*/*"))
+                    },
                 ),
             ),
         )

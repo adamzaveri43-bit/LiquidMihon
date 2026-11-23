@@ -1,10 +1,15 @@
 package eu.kanade.presentation.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.TextFieldLineLimits
@@ -12,7 +17,6 @@ import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
@@ -58,6 +62,12 @@ import mihon.icons.materialsymbols.rounded.Close
 import mihon.icons.materialsymbols.rounded.MoreVert
 import mihon.icons.materialsymbols.rounded.Search
 import tachiyomi.i18n.MR
+import tachiyomi.presentation.core.components.glass.LiquidGlassDefaults
+import tachiyomi.presentation.core.components.glass.LocalLiquidGlass
+import tachiyomi.presentation.core.components.glass.LocalLiquidGlassEdgeProvided
+import tachiyomi.presentation.core.components.glass.liquidGlass
+import tachiyomi.presentation.core.components.glass.withGlassTransparency
+import tachiyomi.presentation.core.components.material.Icon
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.clearFocusOnSoftKeyboardHide
 import tachiyomi.presentation.core.util.runOnEnterKeyPressed
@@ -131,33 +141,92 @@ fun AppBar(
 
     scrollBehavior: TopAppBarScrollBehavior? = null,
 ) {
+    // iOS 26 style: content blurs and fades under the bar, controls sit in floating glass
+    val glass = LocalLiquidGlass.current
+    val glassEdge = glass && backgroundColor == null
+    // A surrounding container may already draw the edge for the whole top bar stack
+    val drawGlassEdge = glassEdge && !LocalLiquidGlassEdgeProvided.current
+    // Plain glass buttons (no backdrop, so nothing scrolling underneath shows in them) with a light fill
+    // and a clear rim to stand out on the bar
+    val glassColors = LiquidGlassDefaults.colors().let { base ->
+        base.copy(
+            tint = if (base.gloss) {
+                base.tint.copy(alpha = 0.7f)
+            } else {
+                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.16f)
+            }.withGlassTransparency(),
+            rim = base.rim.copy(alpha = base.rim.alpha.coerceAtLeast(0.55f)),
+        )
+    }
     Column(
-        modifier = modifier,
+        modifier = modifier.then(
+            if (drawGlassEdge) {
+                // Solid bar: only the buttons on it are glass
+                Modifier.background(MaterialTheme.colorScheme.background)
+            } else {
+                Modifier
+            },
+        ),
     ) {
         TopAppBar(
             navigationIcon = {
-                if (isActionMode) {
-                    IconButton(onClick = onCancelActionMode) {
-                        Icon(
-                            imageVector = MaterialSymbols.Rounded.Close,
-                            contentDescription = stringResource(MR.strings.action_cancel),
-                        )
+                val navigationButton: (@Composable () -> Unit)? = if (isActionMode) {
+                    {
+                        IconButton(onClick = onCancelActionMode) {
+                            Icon(
+                                imageVector = MaterialSymbols.Rounded.Close,
+                                contentDescription = stringResource(MR.strings.action_cancel),
+                            )
+                        }
                     }
                 } else {
                     navigateUp?.let {
-                        IconButton(onClick = it) {
-                            UpIcon(navigationIcon = navigationIcon)
+                        {
+                            IconButton(onClick = it) {
+                                UpIcon(navigationIcon = navigationIcon)
+                            }
                         }
+                    }
+                }
+                if (navigationButton != null) {
+                    if (glass) {
+                        Box(
+                            modifier = Modifier
+                                .padding(start = 4.dp)
+                                .liquidGlass(shape = CircleShape, colors = glassColors),
+                        ) {
+                            navigationButton()
+                        }
+                    } else {
+                        navigationButton()
                     }
                 }
             },
             title = titleContent,
-            actions = actions,
-            colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = backgroundColor ?: MaterialTheme.colorScheme.surfaceColorAtElevation(
-                    elevation = if (isActionMode) 3.dp else 0.dp,
-                ),
-            ),
+            actions = {
+                if (glass) {
+                    Row(
+                        modifier = Modifier
+                            .padding(end = 4.dp)
+                            .liquidGlass(shape = CircleShape, colors = glassColors),
+                        content = actions,
+                    )
+                } else {
+                    actions()
+                }
+            },
+            colors = if (glassEdge) {
+                TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent,
+                    scrolledContainerColor = Color.Transparent,
+                )
+            } else {
+                TopAppBarDefaults.topAppBarColors(
+                    containerColor = backgroundColor ?: MaterialTheme.colorScheme.surfaceColorAtElevation(
+                        elevation = if (isActionMode) 3.dp else 0.dp,
+                    ),
+                )
+            },
             scrollBehavior = scrollBehavior,
         )
     }
@@ -279,6 +348,7 @@ fun SearchToolbar(
     actions: @Composable RowScope.() -> Unit = {},
     scrollBehavior: TopAppBarScrollBehavior? = null,
     interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
+    backgroundColor: Color? = null,
 ) {
     val focusRequester = remember { FocusRequester() }
     val searchFieldState = rememberTextFieldState(searchQuery.orEmpty())
@@ -301,6 +371,7 @@ fun SearchToolbar(
 
     AppBar(
         modifier = modifier,
+        backgroundColor = backgroundColor,
         titleContent = {
             if (searchQuery == null) return@AppBar titleContent()
 

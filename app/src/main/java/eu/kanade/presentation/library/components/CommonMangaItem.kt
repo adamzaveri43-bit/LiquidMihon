@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.FilledIconButton
-import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
@@ -41,6 +40,7 @@ import mihon.icons.materialsymbols.MaterialSymbols
 import mihon.icons.materialsymbols.roundedfilled.PlayArrow
 import tachiyomi.i18n.MR
 import tachiyomi.presentation.core.components.BadgeGroup
+import tachiyomi.presentation.core.components.material.Icon
 import tachiyomi.presentation.core.i18n.stringResource
 import tachiyomi.presentation.core.util.selectedBackground
 import tachiyomi.domain.manga.model.MangaCover as MangaCoverModel
@@ -121,7 +121,7 @@ fun MangaCompactGridItem(
  * Title overlay for [MangaCompactGridItem]
  */
 @Composable
-private fun BoxScope.CoverTextOverlay(
+internal fun BoxScope.CoverTextOverlay(
     title: String,
     onClickContinueReading: (() -> Unit)? = null,
 ) {
@@ -231,7 +231,7 @@ fun MangaComfortableGridItem(
  * Common cover layout to add contents to be drawn on top of the cover.
  */
 @Composable
-private fun MangaGridCover(
+internal fun MangaGridCover(
     modifier: Modifier = Modifier,
     cover: @Composable BoxScope.() -> Unit = {},
     badgesStart: (@Composable RowScope.() -> Unit)? = null,
@@ -266,7 +266,7 @@ private fun MangaGridCover(
 }
 
 @Composable
-private fun GridItemTitle(
+internal fun GridItemTitle(
     title: String,
     style: TextStyle,
     minLines: Int,
@@ -289,7 +289,7 @@ private fun GridItemTitle(
  * Wrapper for grid items to handle selection state, click and long click.
  */
 @Composable
-private fun GridItemSelectable(
+internal fun GridItemSelectable(
     isSelected: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,

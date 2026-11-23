@@ -1,17 +1,24 @@
 package eu.kanade.domain.ui
 
+import android.text.format.DateFormat
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
+import eu.kanade.domain.ui.model.AppFont
 import eu.kanade.domain.ui.model.AppTheme
+import eu.kanade.domain.ui.model.GlassStyle
+import eu.kanade.domain.ui.model.LibraryBackground
 import eu.kanade.domain.ui.model.TabletUiMode
 import eu.kanade.domain.ui.model.ThemeMode
-import eu.kanade.tachiyomi.util.system.DeviceUtil
+import eu.kanade.domain.ui.model.TimeFormat
 import eu.kanade.tachiyomi.util.system.isDynamicColorAvailable
+import logcat.LogPriority
 import tachiyomi.core.common.preference.Preference
 import tachiyomi.core.common.preference.PreferenceStore
 import tachiyomi.core.common.preference.getEnum
+import tachiyomi.core.common.util.system.logcat
 import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeFormatterBuilder
 import java.time.format.FormatStyle
 import java.util.Locale
 
@@ -25,27 +32,112 @@ class UiPreferences(
 
     val appTheme: Preference<AppTheme> = preferenceStore.getEnum(
         "pref_app_theme",
-        if (DeviceUtil.isDynamicColorAvailable) {
-            AppTheme.MONET
-        } else {
-            AppTheme.DEFAULT
-        },
+        AppTheme.LIQUID_GLASS,
     )
 
     val themeDarkAmoled: Preference<Boolean> = preferenceStore.getBoolean("pref_theme_dark_amoled_key", false)
 
+    val glassStyle: Preference<GlassStyle> = preferenceStore.getEnum("pref_glass_style", GlassStyle.LIQUID_GLASS)
+
+    /** How see-through glass is, in percent: 0 is opaque, 50 the default look and 100 fully clear. */
+    val glassTransparency: Preference<Int> = preferenceStore.getInt("pref_glass_transparency", 50)
+
+    /** ARGB accent color overriding the theme's, 0 for the theme's own. */
+    val accentColor: Preference<Int> = preferenceStore.getInt("pref_accent_color", 0)
+
+    val appFont: Preference<AppFont> = preferenceStore.getEnum("pref_app_font", AppFont.DEFAULT)
+
+    val libraryBackground: Preference<LibraryBackground> = preferenceStore.getEnum(
+        "pref_library_background",
+        LibraryBackground.AURORA,
+    )
+
+    val libraryBackgroundImage: Preference<String> = preferenceStore.getString("pref_library_background_image", "")
+
+    val libraryAnimations: Preference<Boolean> = preferenceStore.getBoolean("pref_library_animations", true)
+
+    val libraryBackgroundAnimated: Preference<Boolean> = preferenceStore.getBoolean(
+        "pref_library_background_animated",
+        true,
+    )
+
+    /** Comma separated ARGB hex colors of the custom gradient. */
+    val libraryGradientColors: Preference<String> = preferenceStore.getString("pref_library_gradient_colors", "")
+
+    /** Blur radius in dp applied to an image background. */
+    val libraryBackgroundBlur: Preference<Int> = preferenceStore.getInt("pref_library_background_blur", 0)
+
+    /** How much an image background is darkened (or lightened in light mode), in percent. */
+    val libraryBackgroundDim: Preference<Int> = preferenceStore.getInt("pref_library_background_dim", 50)
+
+    /** Show the cover swinging open before the reader when resuming. */
+    val readingAnimation: Preference<Boolean> = preferenceStore.getBoolean("pref_reading_animation", true)
+
+    /** Library folders, as JSON. */
+    val libraryFolders: Preference<String> = preferenceStore.getString("pref_library_folders", "")
+
+    /** Hand arranged order of library entries for the custom sort, as comma separated entry keys. */
+    val libraryCustomOrder: Preference<String> = preferenceStore.getString("pref_library_custom_order", "")
+
+    /** User saved UI presets, as JSON. */
+    val uiPresets: Preference<String> = preferenceStore.getString("pref_ui_presets", "")
+
+    val libraryCoverFlowAdaptiveBackground: Preference<Boolean> = preferenceStore.getBoolean(
+        "pref_library_cover_flow_adaptive_background",
+        true,
+    )
+
     val relativeTime: Preference<Boolean> = preferenceStore.getBoolean("relative_time_v2", true)
 
     val dateFormat: Preference<String> = preferenceStore.getString("app_date_format", "")
+
+    val timeFormat: Preference<TimeFormat> = preferenceStore.getEnum("app_time_format", TimeFormat.FOLLOW_LANGUAGE)
 
     val tabletUiMode: Preference<TabletUiMode> = preferenceStore.getEnum("tablet_ui_mode", TabletUiMode.AUTOMATIC)
 
     val imagesInDescription: Preference<Boolean> = preferenceStore.getBoolean("pref_render_images_description", true)
 
     companion object {
-        fun dateFormat(format: String): DateTimeFormatter = when (format) {
-            "" -> DateTimeFormatter.ofLocalizedDate(FormatStyle.SHORT)
-            else -> DateTimeFormatter.ofPattern(format, Locale.getDefault())
+        fun dateFormat(format: String, locale: Locale): DateTimeFormatter = when (format) {
+            "" -> DateTimeFormatter.ofLocalizedDate(FormatStyle.SHORT).withLocale(locale)
+            else -> DateTimeFormatter.ofPattern(format, locale)
+        }
+
+        fun timeFormat(timeFormat: TimeFormat, locale: Locale, is24HourSystem: Boolean): DateTimeFormatter {
+            val use24Hours = when (timeFormat) {
+                TimeFormat.FOLLOW_LANGUAGE -> {
+                    return DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT).withLocale(locale)
+                }
+
+                TimeFormat.FOLLOW_SYSTEM -> is24HourSystem
+                TimeFormat.HOURS_24 -> true
+                TimeFormat.HOURS_12 -> false
+            }
+
+            val skeleton = if (use24Hours) "Hm" else "hm"
+            val pattern = DateFormat.getBestDateTimePattern(locale, skeleton)
+            return try {
+                DateTimeFormatter.ofPattern(pattern, locale)
+            } catch (e: IllegalArgumentException) {
+                val fallbackPattern = if (use24Hours) "HH:mm" else "h:mm a"
+                logcat(LogPriority.ERROR, e) {
+                    "Failed to apply best pattern ('$pattern'), falling back to '$fallbackPattern'"
+                }
+                DateTimeFormatter.ofPattern(fallbackPattern, locale)
+            }
+        }
+
+        fun dateTimeFormat(
+            dateFormat: String,
+            timeFormat: TimeFormat,
+            locale: Locale,
+            is24HourSystem: Boolean,
+        ): DateTimeFormatter {
+            return DateTimeFormatterBuilder()
+                .append(dateFormat(dateFormat, locale))
+                .appendLiteral(' ')
+                .append(timeFormat(timeFormat, locale, is24HourSystem))
+                .toFormatter(locale)
         }
     }
 }

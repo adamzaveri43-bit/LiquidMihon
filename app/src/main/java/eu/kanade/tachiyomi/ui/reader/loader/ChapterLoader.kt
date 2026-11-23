@@ -11,6 +11,7 @@ import eu.kanade.tachiyomi.ui.reader.model.ReaderChapter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import mihon.app.di.appGraph
 import mihon.core.archive.archiveReader
 import mihon.core.archive.epubReader
 import tachiyomi.core.common.i18n.stringResource
@@ -103,7 +104,12 @@ class ChapterLoader(
                 when (format) {
                     is Format.Directory -> DirectoryPageLoader(format.file)
                     is Format.Archive -> ArchivePageLoader(format.file.archiveReader(context))
-                    is Format.Epub -> EpubPageLoader(format.file.epubReader(context))
+                    is Format.Epub -> EpubPageLoader(
+                        format.file.epubReader(context),
+                        context,
+                        context.appGraph.readerPreferences,
+                    )
+                    is Format.Pdf -> PdfPageLoader(format.file, context)
                 }
             }
             source is HttpSource -> HttpPageLoader(chapter, source, chapterCache, appScope, canLoadAhead)
