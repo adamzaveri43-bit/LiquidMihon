@@ -366,13 +366,21 @@ abstract class ModernMagazineSource(
             leadImage = articles.firstNotNullOfOrNull { it.leadImage },
             blocks = articles.map { ArticleBlock.ListItem(it.title) },
         )
+        // One set for the whole issue: the cover photo is usually the first story's lead picture
+        val shownImages = HashSet<String>()
         val pages = MagazinePages.paginate(
             contents,
             publication,
+            shownImages = shownImages,
             byline = if (articles.size == 1) "1 story" else "${articles.size} stories",
         ).toMutableList()
         for (article in articles) {
-            pages += MagazinePages.paginate(article, publication, firstPageNumber = pages.size + 1)
+            pages += MagazinePages.paginate(
+                article,
+                publication,
+                firstPageNumber = pages.size + 1,
+                shownImages = shownImages,
+            )
         }
         pages
     }

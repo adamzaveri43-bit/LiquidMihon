@@ -581,7 +581,30 @@ object ArticleExtractor {
     }
 
     /** Same picture at different sizes or CDN params counts once. */
-    internal fun imageKey(url: String): String = url.substringBefore('?').substringAfter("://")
+    internal fun imageKey(url: String): String {
+        // Image CDNs that wrap the original (…/resize/1920x1433!/?url=https://…/photo.jpg) key off the original
+        wrappedImage(url)?.let { return imageKey(it) }
+        return plainImageKey(url)
+    }
+
+    private fun wrappedImage(url: String): String? {
+        val query = url.substringAfter('?', "").ifEmpty { return null }
+        val wrapped = query.split('&').firstOrNull { it.startsWith("url=") }?.removePrefix("url=") ?: return null
+        val decoded = runCatching { java.net.URLDecoder.decode(wrapped, "UTF-8") }.getOrNull() ?: return null
+        return decoded.takeIf { it.startsWith("http") && it != url }
+    }
+
+    private fun plainImageKey(url: String): String = url.substringBefore('?').substringBefore('#')
+        .substringAfter("://")
+        .lowercase()
+        // WordPress's image proxy serves the site's own files: i0.wp.com/site.com/... is site.com/...
+        .replace(WP_PROXY, "")
+        .removePrefix("www.")
+        // Resized copies of one upload: photo-1024x683.jpg, photo-scaled.jpg and photo.jpg are the same picture
+        .replace(SIZE_SUFFIX, "")
+
+    private val WP_PROXY = Regex("^i\\d\\.wp\\.com/")
+    private val SIZE_SUFFIX = Regex("(-\\d{2,5}x\\d{2,5}|-scaled|-e\\d{10,})(?=\\.[a-z0-9]+$)")
 
     private fun cleanText(text: String): String = Jsoup.parse(text).text()
         .replace(' ', ' ')

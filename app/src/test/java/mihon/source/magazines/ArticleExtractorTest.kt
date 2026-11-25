@@ -238,4 +238,25 @@ class ArticleExtractorTest {
         text shouldContain "A closing paragraph"
         article.blocks.none { it is ArticleBlock.Image && it.url.endsWith("other.jpg") } shouldBe true
     }
+
+    @Test
+    fun `recognises resized and proxied copies of the same picture`() {
+        val original = ArticleExtractor.imageKey("https://electrek.co/wp-content/uploads/2026/11/photo.jpg")
+        ArticleExtractor.imageKey("https://electrek.co/wp-content/uploads/2026/11/photo-1024x683.jpg?w=1200") shouldBe
+            original
+        val proxied = "https://i0.wp.com/electrek.co/wp-content/uploads/2026/11/photo.jpg?resize=1200"
+        ArticleExtractor.imageKey(proxied) shouldBe original
+        val scaled = "https://www.electrek.co/wp-content/uploads/2026/11/photo-scaled.jpg"
+        ArticleExtractor.imageKey(scaled) shouldBe original
+        ArticleExtractor.imageKey(
+            "https://assets.example/dims4/default/abc/resize/1920x1433!/" +
+                "?url=https%3A%2F%2Felectrek.co%2Fwp-content%2Fuploads%2F2026%2F11%2Fphoto.jpg",
+        ) shouldBe original
+
+        // Different pictures stay different
+        (ArticleExtractor.imageKey("https://electrek.co/wp-content/uploads/2026/11/photo-2.jpg") == original) shouldBe
+            false
+        (ArticleExtractor.imageKey("https://other.example/wp-content/uploads/2026/11/photo.jpg") == original) shouldBe
+            false
+    }
 }

@@ -81,11 +81,13 @@ internal object MagazinePages {
         publication: Publication,
         byline: String? = null,
         firstPageNumber: Int = 1,
+        shownImages: MutableSet<String> = HashSet(),
     ): List<String> {
         val accent = accentFor(publication.color)
         val urls = mutableListOf<String>()
         val pendingImages = mutableListOf<String>()
-        val seen = HashSet<String>()
+        // Pictures already shown (in this article, or earlier in the issue) aren't shown again
+        val seen = shownImages
 
         val lead = article.leadImage?.takeIf { seen.add(ArticleExtractor.imageKey(it)) }
         if (lead != null) urls += lead
